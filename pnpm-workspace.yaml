@@ -1,0 +1,5 @@
+overrides:
+  "@better-auth/utils": 0.4.2
+onlyBuiltDependencies:
+  - esbuild
+  - unrs-resolver

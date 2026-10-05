@@ -1,0 +1,4 @@
+drizzle
+pnpm-lock.yaml
+src/components/ui/icons.generated.ts
+src/styles/tokens.css

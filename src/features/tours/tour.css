@@ -1,0 +1,219 @@
+.driver-popover.allship-tour {
+  box-sizing: border-box;
+  min-width: 280px;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 20px 24px 16px;
+  border-radius: 28px;
+  background-color: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  font-family: var(--font-google-sans), ui-sans-serif, system-ui, sans-serif;
+  box-shadow:
+    0 4px 8px 3px rgb(0 0 0 / 0.15),
+    0 1px 3px 0 rgb(0 0 0 / 0.3);
+  -webkit-font-smoothing: antialiased;
+}
+
+.allship-tour .allship-tour-overline {
+  margin: 0 0 4px;
+  padding-right: 32px;
+  color: var(--md-primary);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.allship-tour .driver-popover-title {
+  margin: 0;
+  padding-right: 32px;
+  color: var(--md-on-surface);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 500;
+  letter-spacing: 0.009em;
+}
+
+.allship-tour .driver-popover-title[style*="block"] + .driver-popover-description {
+  margin-top: 4px;
+}
+
+.allship-tour .driver-popover-description {
+  margin: 0;
+  color: var(--md-on-surface-variant);
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+  letter-spacing: 0.018em;
+}
+
+.allship-tour .driver-popover-close-btn {
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  color: var(--md-on-surface-variant);
+  transition: background-color 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.allship-tour .driver-popover-close-btn:hover {
+  color: var(--md-on-surface-variant);
+  background-color: color-mix(in srgb, var(--md-on-surface-variant) 8%, transparent);
+}
+
+.allship-tour .driver-popover-footer {
+  margin-top: 20px;
+  gap: 8px;
+}
+
+.allship-tour .driver-popover-progress-text {
+  color: var(--md-on-surface-variant);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.allship-tour .driver-popover-navigation-btns {
+  gap: 8px;
+}
+
+.allship-tour .driver-popover-navigation-btns button + button {
+  margin-left: 0;
+}
+
+.allship-tour .driver-popover-footer-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  height: 40px;
+  min-width: 48px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 9999px;
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  letter-spacing: 0.007em;
+  text-shadow: none;
+  transition:
+    background-color 150ms cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.allship-tour .driver-popover-prev-btn {
+  padding: 0 12px;
+  background-color: transparent;
+  color: var(--md-primary);
+}
+
+.allship-tour .driver-popover-prev-btn:hover,
+.allship-tour .driver-popover-prev-btn:focus {
+  background-color: color-mix(in srgb, var(--md-primary) 8%, transparent);
+}
+
+.allship-tour .driver-popover-prev-btn[hidden],
+.allship-tour .driver-popover-prev-btn.driver-popover-btn-disabled {
+  display: none;
+}
+
+.allship-tour .driver-popover-next-btn {
+  background-color: var(--md-primary);
+  color: var(--md-on-primary);
+}
+
+.allship-tour .driver-popover-next-btn:hover {
+  background-color: color-mix(in srgb, var(--md-on-primary) 8%, var(--md-primary));
+  box-shadow:
+    0 1px 2px 0 rgb(0 0 0 / 0.3),
+    0 1px 3px 1px rgb(0 0 0 / 0.15);
+}
+
+.allship-tour .driver-popover-next-btn:focus {
+  background-color: color-mix(in srgb, var(--md-on-primary) 10%, var(--md-primary));
+}
+
+.allship-tour .driver-popover-footer-btn:focus-visible,
+.allship-tour .driver-popover-close-btn:focus-visible {
+  outline: 2px solid var(--md-secondary);
+  outline-offset: 2px;
+}
+
+.allship-tour .driver-popover-arrow {
+  border-width: 6px;
+  border-color: var(--md-surface-container-high);
+}
+
+.allship-tour .driver-popover-arrow-side-left {
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+  border-right-color: transparent;
+}
+
+.allship-tour .driver-popover-arrow-side-right {
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+}
+
+.allship-tour .driver-popover-arrow-side-top {
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+  border-right-color: transparent;
+}
+
+.allship-tour .driver-popover-arrow-side-bottom {
+  border-top-color: transparent;
+  border-left-color: transparent;
+  border-right-color: transparent;
+}
+
+.allship-tour .driver-popover-arrow-align-start.driver-popover-arrow-side-top,
+.allship-tour .driver-popover-arrow-align-start.driver-popover-arrow-side-bottom {
+  left: 24px;
+}
+
+.allship-tour .driver-popover-arrow-align-end.driver-popover-arrow-side-top,
+.allship-tour .driver-popover-arrow-align-end.driver-popover-arrow-side-bottom {
+  right: 24px;
+}
+
+.driver-active-element {
+  outline: none;
+}
+
+.driver-fade .driver-overlay {
+  animation: allship-tour-scrim 300ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.driver-fade .driver-popover.allship-tour {
+  animation: allship-tour-in 400ms cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+
+@keyframes allship-tour-scrim {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes allship-tour-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .driver-fade .driver-overlay,
+  .driver-fade .driver-popover.allship-tour {
+    animation: none;
+  }
+}
