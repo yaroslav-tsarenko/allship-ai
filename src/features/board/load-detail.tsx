@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { arrowForwardIcon, locationOnIcon, tripOriginIcon } from "@/components/ui/icons.generated";
-import { describeDetail, loadSpecs } from "@/features/loads/spec";
+import { detailSections } from "@/features/loads/spec";
 import type { LoadCategory } from "@/server/db/schema/enums";
 import type { LoadStop } from "@/server/db/schema/loads";
 import { formatWindow, place } from "./format";
@@ -42,9 +42,7 @@ export function RouteBlock({ pickup, dropoff, booked }: { pickup: LoadStop; drop
 }
 
 export function DetailSections({ category, details }: { category: LoadCategory; details: Record<string, unknown> }) {
-  const sections = loadSpecs[category]
-    .map((s) => ({ title: s.title, rows: s.fields.map((f) => ({ label: f.label, value: describeDetail(f, details[f.name]) })).filter((r) => r.value !== null) }))
-    .filter((s) => s.rows.length > 0);
+  const sections = detailSections(category, details).filter((s) => s.rows.length > 0);
   const notes = typeof details.notes === "string" && details.notes.trim() ? details.notes : null;
   if (!sections.length && !notes) return <p className="text-body-md text-on-surface-variant">The shipper didn&apos;t add extra details.</p>;
   return (

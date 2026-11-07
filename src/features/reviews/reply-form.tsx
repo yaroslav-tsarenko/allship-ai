@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/text-area";
+import { checkText } from "@/lib/validation/text-policy";
 import { replyToReviewAction } from "@/server/actions/trips";
 
 export function ReplyForm({ reviewId, existing }: { reviewId: string; existing?: string | null }) {
@@ -27,9 +28,12 @@ export function ReplyForm({ reviewId, existing }: { reviewId: string; existing?:
       onSubmit={async (event) => {
         event.preventDefault();
         if (reply.trim().length < 2) return setError("Write a short reply");
+        const issue = checkText(reply, { contacts: false });
+        if (issue) return setError(issue.message);
         setError(undefined);
         const result = await executeAsync({ reviewId, reply: reply.trim() });
         if (result?.serverError) return setError(result.serverError);
+        if (result?.validationErrors) return setError(result.validationErrors.reply?._errors?.[0] ?? "Check your reply and try again.");
         setOpen(false);
         toast(existing ? "Reply updated" : "Reply posted");
       }}

@@ -55,6 +55,7 @@ const turnstile = "https://challenges.cloudflare.com";
 
 const maps = {
   apis: "https://maps.googleapis.com",
+  places: "https://places.googleapis.com",
   gstatic: "https://maps.gstatic.com",
   fontsCss: "https://fonts.googleapis.com",
   fonts: "https://fonts.gstatic.com",
@@ -157,6 +158,7 @@ export function cspDirectives(options: CspOptions): Record<string, string[]> {
       stripe.api,
       stripe.js,
       maps.apis,
+      maps.places,
       google.gtm,
       google.gtmAll,
       google.analytics,

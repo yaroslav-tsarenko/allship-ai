@@ -52,7 +52,7 @@ function place(stop: { city?: string; state?: string }) {
 function detailsFor(category: LoadCategory, details: Record<string, unknown>) {
   const out: Record<string, string> = {};
   for (const f of fieldsOf(category)) {
-    const v = describeDetail(f, details[f.name]);
+    const v = describeDetail(f, details[f.name], details);
     if (v) out[f.label] = v;
   }
   return out;

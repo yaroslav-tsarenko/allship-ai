@@ -8,7 +8,7 @@ import { Container } from "@/components/marketing/section";
 import { Icon } from "@/components/ui/icon";
 import { locationOnIcon, tripOriginIcon } from "@/components/ui/icons.generated";
 import { categoryIcons, formatWindow, timeLeft } from "@/features/loads/presentation";
-import { describeDetail, loadSpecs } from "@/features/loads/spec";
+import { detailSections } from "@/features/loads/spec";
 import { BidCta } from "@/features/public-load/bid-cta";
 import { buildMetadata } from "@/lib/seo";
 import { db } from "@/server/db/client";
@@ -71,9 +71,7 @@ export default async function PublicLoadPage({ params }: Props) {
 
   const { open, left } = biddingState(l.status, l.biddingClosesAt);
   const details = (l.details ?? {}) as Record<string, unknown>;
-  const sections = loadSpecs[l.category]
-    .map((s) => ({ title: s.title, rows: s.fields.map((f) => ({ label: f.label, value: describeDetail(f, details[f.name]) })).filter((r): r is { label: string; value: string } => Boolean(r.value)) }))
-    .filter((s) => s.rows.length > 0);
+  const sections = detailSections(l.category, details).filter((s) => s.rows.length > 0);
   const stops = [
     { kind: "pickup" as const, label: "Pickup", city: l.pickupCity, state: l.pickupState, zip: l.pickupZip, window: formatWindow({ windowStart: l.pickupDate, windowEnd: l.pickupEnd ?? undefined }) },
     { kind: "dropoff" as const, label: "Delivery", city: l.dropoffCity, state: l.dropoffState, zip: l.dropoffZip, window: formatWindow({ windowStart: l.dropoffDate, windowEnd: l.dropoffEnd ?? undefined }) },

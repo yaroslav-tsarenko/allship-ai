@@ -12,9 +12,13 @@ export const metadata: Metadata = { title: "Edit draft" };
 
 type Props = { params: Promise<{ publicId: string }> };
 
+const textKeys = ["address", "city", "state", "postalCode", "windowStart", "windowEnd", "notes"] as const;
+
 const toStop = (s: Partial<Record<keyof StopValues, unknown>>): StopValues => {
   const base = emptyStop();
-  for (const k of Object.keys(base) as (keyof StopValues)[]) base[k] = typeof s[k] === "string" ? (s[k] as string) : "";
+  for (const k of textKeys) base[k] = typeof s[k] === "string" ? (s[k] as string) : "";
+  if (typeof s.lat === "number" && typeof s.lng === "number") Object.assign(base, { lat: s.lat, lng: s.lng });
+  if (typeof s.placeId === "string") base.placeId = s.placeId;
   return base;
 };
 

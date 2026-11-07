@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { policyText } from "@/lib/validation/text-policy";
 import { assertAdmin, getActor } from "@/server/actor";
 import { cancelBookedWithRefund, openDispute, resolveDispute, withdrawDispute } from "@/server/disputes/service";
 import { sendTransfer } from "@/server/payments/payouts";
@@ -102,7 +103,7 @@ export const openDisputeAction = withActor
     z.object({
       loadId: z.uuid(),
       reason: z.enum(["damage", "not_delivered", "late", "missing_items", "overcharge", "no_show", "other"]),
-      details: z.string().trim().min(30, "Describe what happened in at least 30 characters.").max(4000),
+      details: policyText({ label: "what happened", min: 30, max: 4000, multiline: true, required: true, contacts: false, minMessage: "Describe what happened in at least 30 characters." }),
       evidence: keys.optional(),
     }),
   )
@@ -141,13 +142,13 @@ export const retryPayoutAction = withActor.inputSchema(z.object({ payoutId: z.uu
   return { paid: result?.status === "paid" };
 });
 
-export const createReviewAction = withActor.inputSchema(z.object({ loadId: z.uuid(), rating: z.number().int().min(1).max(5), body: z.string().trim().max(2000).optional() })).action(async ({ parsedInput, ctx }) => {
+export const createReviewAction = withActor.inputSchema(z.object({ loadId: z.uuid(), rating: z.number().int().min(1).max(5), body: policyText({ label: "your review", max: 2000, multiline: true, contacts: false }).optional() })).action(async ({ parsedInput, ctx }) => {
   await createReview(ctx.actor, parsedInput.loadId, parsedInput);
   refresh();
   return { ok: true };
 });
 
-export const replyToReviewAction = withActor.inputSchema(z.object({ reviewId: z.uuid(), reply: z.string().trim().min(2).max(1000) })).action(async ({ parsedInput, ctx }) => {
+export const replyToReviewAction = withActor.inputSchema(z.object({ reviewId: z.uuid(), reply: policyText({ label: "a reply", min: 2, max: 1000, multiline: true, required: true, contacts: false }) })).action(async ({ parsedInput, ctx }) => {
   await replyToReview(ctx.actor, parsedInput.reviewId, parsedInput.reply);
   refresh();
   return { ok: true };

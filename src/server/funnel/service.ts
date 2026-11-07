@@ -5,6 +5,7 @@ import { categories } from "@/content/categories";
 import { formConfigs, mapPublicLoad, PayloadError, SMS_CONSENT_TEXT, summarize, type ContactValues, type FormKind, type MappedLoad } from "@/features/public-load/model";
 import type { Attribution } from "@/lib/attribution";
 import { log } from "@/lib/log";
+import { zipState } from "@/server/geo/zip";
 import { ActionError } from "@/server/actions/safe-action";
 import { getActor } from "@/server/actor";
 import { auth } from "@/server/auth/auth";
@@ -33,7 +34,7 @@ function attributionFields(attribution: Attribution) {
 
 export function mapOrThrow(kind: FormKind, payload: unknown) {
   try {
-    return mapPublicLoad(kind, payload);
+    return mapPublicLoad(kind, payload, new Date(), zipState);
   } catch (error) {
     if (error instanceof PayloadError) throw new ActionError(error.message);
     throw error;
@@ -206,7 +207,7 @@ export async function claimForUser(userId: string, stash: StashedLoad | null) {
   const created: Array<{ id: string; publicId: string; title: string }> = [];
   if (stash) {
     try {
-      const mapped = mapPublicLoad(stash.kind, stash.payload);
+      const mapped = mapPublicLoad(stash.kind, stash.payload, new Date(), zipState);
       const row = await createPublicLoad({ shipperId: userId, category: mapped.category, title: mapped.title, pickup: mapped.pickup, dropoff: mapped.dropoff, details: mapped.details, notes: mapped.notes, publish: true });
       created.push(row);
       await upsertLead({ email: current.email, contact: stash.contact, kind: stash.kind, path: formConfigs[stash.kind].path, mapped, attribution: stash.attribution, status: "converted", userId, loadId: row.id, smsConsent: stash.smsConsent });

@@ -11,6 +11,7 @@ import { flagIcon, lockClockIcon } from "@/components/ui/icons.generated";
 import { SelectField } from "@/components/ui/select-field";
 import { TextArea } from "@/components/ui/text-area";
 import { PhotoUploader } from "@/features/uploads/photo-uploader";
+import { checkText } from "@/lib/validation/text-policy";
 import { openDisputeAction } from "@/server/actions/trips";
 import { disputeReasonLabels, reasonsByRole, type DisputeReasonValue } from "./reasons";
 
@@ -46,11 +47,16 @@ export function DisputeDialog({ loadId, role, open: controlled, onOpenChange, tr
     const next: typeof errors = {};
     if (!reason) next.reason = "Choose what went wrong";
     if (details.trim().length < MIN_DETAILS) next.details = `Add a few more details (at least ${MIN_DETAILS} characters)`;
+    else next.details = checkText(details, { contacts: false })?.message;
     setErrors(next);
     if (next.reason || next.details || !reason) return;
     const res = await executeAsync({ loadId, reason, details: details.trim(), evidence: evidence.length ? evidence : undefined });
     if (res?.serverError) return void toast.error(res.serverError);
-    if (res?.validationErrors) return void toast.error("Check the form and try again.");
+    if (res?.validationErrors) {
+      const message = res.validationErrors.details?._errors?.[0];
+      if (message) return setErrors((x) => ({ ...x, details: message }));
+      return void toast.error("Check the form and try again.");
+    }
     toast.success(role === "shipper" ? "Problem reported. Payment is on hold while we review." : "Problem reported. Our team will review it.");
     setOpen(false);
     setReason("");

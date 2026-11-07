@@ -1,97 +1,18 @@
 import Link from "next/link";
 import { ScrubWords, PinnedRow } from "@/components/motion/scroll";
 import { Container } from "@/components/marketing/section";
-import { FeatureSpotlight, Theater, TheaterTabs } from "@/components/theater";
-import { EscrowShield, VerifiedBadge } from "@/components/theater/illustrations";
+import { FeatureSpotlight, TheaterTabs } from "@/components/theater";
+import { VerifiedBadge } from "@/components/theater/illustrations";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { arrowForwardIcon, checkIcon, swapHorizIcon } from "@/components/ui/icons.generated";
 import { RouteField } from "@/components/webgl/route-field";
 import { authLinks, site } from "@/content/site";
-import { homeAi, homeEscrow, homeMinis, homeRoles, homeTour } from "./content";
+import { homeAi, homeMinis, homeRoles } from "./content";
 import { MiniStill } from "./mini-still";
 import { QuickQuote } from "./quick-quote";
+import { eyebrow } from "./shared";
 
-const eyebrow = "text-label-lg font-medium tracking-wide text-primary uppercase";
-
-export function HomeTour() {
-  return (
-    <section aria-labelledby="home-tour" className="border-t border-outline-variant bg-surface-container-lowest py-16 medium:py-24">
-      <Container>
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-x-16 gap-y-6 large:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] large:items-end">
-          <div>
-            <p className={eyebrow}>{homeTour.eyebrow}</p>
-            <h2 id="home-tour" className="mt-3 text-headline-lg text-balance text-on-surface medium:text-display-sm">
-              {homeTour.title}
-            </h2>
-          </div>
-          <p className="max-w-[60ch] text-body-lg text-pretty text-on-surface-variant medium:text-body-xl">{homeTour.description}</p>
-        </div>
-        <ol className="mt-10 grid gap-x-8 gap-y-4 border-t border-outline-variant pt-6 medium:grid-cols-3">
-          {homeTour.steps.map((s, i) => (
-            <li key={s.label} className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-2">
-              <span className="font-mono text-title-md text-primary tabular-nums">0{i + 1}</span>
-              <span>
-                <span className="block text-title-md text-on-surface">{s.label}</span>
-                <span className="mt-1 block text-body-md text-pretty text-on-surface-variant">{s.text}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
-        <TheaterTabs
-          className="mt-10"
-          label="How AllShip AI works"
-          tabs={[
-            { scene: "postLoad", label: "Post" },
-            { scene: "bidsCompare", label: "Compare" },
-            { scene: "liveTracking", label: "Track" },
-          ]}
-        />
-      </Container>
-    </section>
-  );
-}
-
-export function HomeEscrow() {
-  return (
-    <section aria-labelledby="home-escrow" className="py-16 medium:py-24">
-      <Container>
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-x-16 gap-y-10 large:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-          <div>
-            <div className="flex items-center gap-3">
-              <EscrowShield className="w-12" />
-              <p className={eyebrow}>{homeEscrow.eyebrow}</p>
-            </div>
-            <h2 id="home-escrow" className="mt-4 text-headline-lg text-balance text-on-surface medium:text-display-sm">
-              {homeEscrow.title}
-            </h2>
-            <p className="mt-4 max-w-[56ch] text-body-lg text-pretty text-on-surface-variant">{homeEscrow.description}</p>
-            <dl className="mt-8 flex flex-col">
-              {homeEscrow.facts.map((f) => (
-                <div key={f.title} className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-x-2 border-t border-outline-variant py-4">
-                  <Icon icon={checkIcon} size={20} className="mt-0.5 text-primary" />
-                  <dt className="text-title-md text-on-surface">{f.title}</dt>
-                  <dd className="col-start-2 mt-1 text-body-md text-pretty text-on-surface-variant">{f.text}</dd>
-                </div>
-              ))}
-            </dl>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Button asChild variant="tonal">
-                <Link href="/safety">How we verify carriers</Link>
-              </Button>
-              <Button asChild variant="text">
-                <Link href="/pricing">See the fee</Link>
-              </Button>
-            </div>
-          </div>
-          <div className="large:pt-14">
-            <Theater scene="escrowFlow" caption="Illustrative amounts. The fee is always the published percentage of the accepted bid." />
-          </div>
-        </div>
-      </Container>
-    </section>
-  );
-}
 
 export function HomeStatement() {
   return (

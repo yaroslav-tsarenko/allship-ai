@@ -1,4 +1,4 @@
-import { describeDetail, fieldsOf } from "@/features/loads/spec";
+import { describeDetail, describeDetails, fieldsOf } from "@/features/loads/spec";
 import type { LoadCategory } from "@/server/db/schema/enums";
 
 const dayFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
@@ -44,15 +44,13 @@ export function keyDetails(category: LoadCategory, details: Record<string, unkno
   const out: { label: string; value: string }[] = [];
   for (const f of fieldsOf(category)) {
     if (out.length >= limit) break;
-    if (f.kind === "switch" || f.kind === "multiselect") continue;
-    const value = describeDetail(f, details[f.name]);
+    if (f.kind === "switch" || f.kind === "multiselect" || f.kind === "vin") continue;
+    const value = describeDetail(f, details[f.name], details);
     if (value) out.push({ label: f.label, value });
   }
   return out;
 }
 
 export function allDetails(category: LoadCategory, details: Record<string, unknown>) {
-  return fieldsOf(category)
-    .map((f) => ({ label: f.label, value: describeDetail(f, details[f.name]) }))
-    .filter((d): d is { label: string; value: string } => d.value !== null);
+  return describeDetails(category, details);
 }

@@ -20,7 +20,7 @@ import { LoadStatusChip } from "@/features/loads/load-status-chip";
 import { getPostBooking, postBookingStatuses } from "@/features/loads/post-booking";
 import { categoryIcons, eventLabels, formatDateTime, formatWindow, timeLeft } from "@/features/loads/presentation";
 import { ReviewForm, Stars } from "@/features/loads/review-form";
-import { describeDetail, loadSpecs } from "@/features/loads/spec";
+import { detailSections } from "@/features/loads/spec";
 import { buildTripSteps, TripProgress } from "@/features/loads/trip-progress";
 import { LazyLiveMap } from "@/features/tracking/lazy-live-map";
 import { MediaGallery } from "@/features/tracking/media-gallery";
@@ -82,10 +82,7 @@ export default async function LoadDetailPage({ params, searchParams }: Props) {
   const pickup = l.pickup as Stop;
   const dropoff = l.dropoff as Stop;
   const { notes, ...details } = (l.details ?? {}) as Record<string, unknown>;
-  const detailRows = loadSpecs[l.category].map((section) => ({
-    title: section.title,
-    rows: section.fields.map((f) => ({ label: f.label, value: describeDetail(f, details[f.name]) })).filter((r): r is { label: string; value: string } => Boolean(r.value)),
-  }));
+  const detailRows = detailSections(l.category, details);
   const activeBids = bids.filter((b) => b.status === "active");
   const instantBidId = (details.instantQuote as { bidId?: string } | undefined)?.bidId;
   const highlightBidId = activeBids.find((b) => b.id === sp.bid || b.id === instantBidId)?.id ?? null;

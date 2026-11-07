@@ -1,23 +1,46 @@
 export type ZipPlace = { city: string; state: string; lat: number; lng: number };
 
-const cache = new Map<string, Promise<Record<string, [string, string, number, number]> | null>>();
+type Table = Record<string, [string, string, number, number]>;
+
+const cache = new Map<string, Promise<Table | null | undefined>>();
 
 function prefixFile(prefix: string) {
   let pending = cache.get(prefix);
   if (!pending) {
     pending = fetch(`/data/zip/${prefix}.json`)
-      .then((r) => (r.ok ? (r.json() as Promise<Record<string, [string, string, number, number]>>) : null))
-      .catch(() => null);
+      .then((r) => (r.ok ? (r.json() as Promise<Table>) : r.status === 404 ? null : undefined))
+      .catch(() => undefined);
+    pending.then((t) => {
+      if (t === undefined) cache.delete(prefix);
+    });
     cache.set(prefix, pending);
   }
   return pending;
 }
 
-export async function lookupZip(zip: string): Promise<ZipPlace | null> {
+export async function findZip(zip: string): Promise<ZipPlace | null | undefined> {
   if (!/^\d{5}$/.test(zip)) return null;
   const table = await prefixFile(zip.slice(0, 3));
+  if (table === undefined) return undefined;
   const row = table?.[zip];
   return row ? { city: row[0], state: row[1], lat: row[2], lng: row[3] } : null;
+}
+
+export async function lookupZip(zip: string): Promise<ZipPlace | null> {
+  return (await findZip(zip)) ?? null;
+}
+
+export async function zipStates(zips: string[]) {
+  const entries = await Promise.all(
+    zips
+      .filter((z) => /^\d{5}$/.test(z))
+      .map(async (z) => {
+        const hit = await findZip(z);
+        return [z, hit === undefined ? undefined : (hit?.state ?? null)] as const;
+      }),
+  );
+  const map = new Map<string, string | null | undefined>(entries);
+  return (zip: string) => map.get(zip);
 }
 
 export function milesBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {

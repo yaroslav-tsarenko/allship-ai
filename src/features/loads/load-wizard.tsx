@@ -18,6 +18,7 @@ import { getMyQuoteLeadAction, saveLoadAction } from "@/server/actions/marketpla
 import type { LoadCategory } from "@/server/db/schema/enums";
 import { AiPrefillNote } from "@/features/assistant/prefill-note";
 import { clearPrefillParam, onPrefill, takeLoadPrefill } from "@/features/assistant/prefill";
+import { zipStates } from "@/features/public-load/zip";
 import { formatDay } from "./presentation";
 import { CategoryStep, DetailsStep, ReviewStep, RouteStep } from "./wizard-steps";
 import { detailsFor, emptyWizard, stepSchema, suggestTitle, toPayload, valuesFromLead, wizardSteps, type QuoteLead, type WizardValues } from "./wizard-model";
@@ -40,7 +41,7 @@ export function LoadWizard({ initial, loadId, initialStep = 0 }: { initial?: Wiz
   const lastSuggestion = useRef("");
 
   const resolver: Resolver<WizardValues> = useCallback(
-    (values, ctx, options) => (zodResolver(stepSchema(stepRef.current, values.category) as never) as unknown as Resolver<WizardValues>)(values, ctx, options),
+    (values, ctx, options) => (zodResolver(stepSchema(stepRef.current, values.category, { zipStates }) as never) as unknown as Resolver<WizardValues>)(values, ctx, options),
     [],
   );
 
@@ -120,13 +121,11 @@ export function LoadWizard({ initial, loadId, initialStep = 0 }: { initial?: Wiz
     [form],
   );
 
+  const focusFirstError = () => window.requestAnimationFrame(() => panelRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus());
+
   const next = async () => {
     const ok = await form.trigger();
-    if (!ok) {
-      const firstError = panelRef.current?.querySelector<HTMLElement>("[aria-invalid='true']");
-      firstError?.focus();
-      return;
-    }
+    if (!ok) return void focusFirstError();
     form.clearErrors();
     await go(step + 1);
   };
@@ -146,7 +145,7 @@ export function LoadWizard({ initial, loadId, initialStep = 0 }: { initial?: Wiz
 
   const submit = async (publish: boolean) => {
     const ok = await form.trigger();
-    if (!ok) return;
+    if (!ok) return void focusFirstError();
     const values = form.getValues();
     if (!values.title.trim()) form.setValue("title", suggestTitle(values) || "Untitled load");
     setPublishing(publish);

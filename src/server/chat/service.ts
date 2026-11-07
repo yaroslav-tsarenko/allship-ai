@@ -13,6 +13,7 @@ import { publish } from "@/server/realtime/publish";
 import { topics } from "@/server/realtime/topics";
 import { ALLOWED_UPLOAD_TYPES, objectExists, signedReadUrl } from "@/server/storage/storage";
 import { log } from "@/lib/log";
+import { maskProfanity } from "@/lib/validation/text-policy";
 
 export type ChatActor = Pick<Actor, "userId" | "orgId" | "orgRole" | "isAdmin">;
 export type ChatRole = "shipper" | "carrier" | "driver" | "admin";
@@ -365,7 +366,7 @@ async function notifyRecipients(row: AccessRow, sender: { id: string; name: stri
 export async function sendMessage(actor: ChatActor & { name: string }, conversationId: string, input: { body: string; attachments?: AttachmentInput[] }) {
   const { row, role } = await access(actor, conversationId);
   if (role === "admin") throw new ActionError("Admins can read this conversation but can't reply.");
-  const body = input.body.replace(/\r\n/g, "\n").trim();
+  const body = maskProfanity(input.body.replace(/\r\n/g, "\n").trim());
   const files = input.attachments ?? [];
   if (!body && files.length === 0) throw new ActionError("Write a message first.");
   if (body.length > MESSAGE_MAX_LENGTH) throw new ActionError(`Messages can be up to ${MESSAGE_MAX_LENGTH.toLocaleString("en-US")} characters.`);

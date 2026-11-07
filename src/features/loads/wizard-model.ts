@@ -1,10 +1,14 @@
 import { z } from "zod";
 import { categories } from "@/content/categories";
 import { loadCategories, type LoadCategory } from "@/server/db/schema/enums";
+import { policyText } from "@/lib/validation/text-policy";
+import { localToday, routeIssues, scheduleIssues } from "./route-rules";
 import { stopSchema, US_STATES, type LoadInput } from "./schema";
-import { detailsSchema, emptyDetails, fieldsOf } from "./spec";
+import { detailsSchema, emptyDetails, fieldsOf, hasOther, otherKey } from "./spec";
 
-export type StopValues = { address: string; city: string; state: string; postalCode: string; windowStart: string; windowEnd: string; notes: string };
+export type StopValues = { address: string; city: string; state: string; postalCode: string; windowStart: string; windowEnd: string; notes: string; lat?: number; lng?: number; placeId?: string };
+
+export type ZipStates = (zips: string[]) => Promise<(zip: string) => string | null | undefined>;
 
 export type WizardValues = {
   category: LoadCategory | "";
@@ -51,20 +55,25 @@ export function cleanDetails(details: unknown) {
 
 const stopWithWindow = stopSchema.refine((s) => !s.windowEnd || s.windowEnd >= s.windowStart, { path: ["windowEnd"], message: "Must be on or after the first date" });
 
-export function stepSchema(step: number, category: LoadCategory | "") {
+export function stepSchema(step: number, category: LoadCategory | "", options: { today?: string; zipStates?: ZipStates } = {}) {
   if (step === 0) return z.object({ category: z.enum(loadCategories, { error: "Choose what you're moving" }) });
   if (step === 1) {
     if (!category) return z.object({});
     return z.object({ details: z.preprocess(cleanDetails, detailsSchema(category)) });
   }
   if (step === 2) {
+    const today = options.today ?? localToday();
     return z
       .object({ pickup: stopWithWindow, dropoff: stopWithWindow })
-      .refine((v) => v.dropoff.windowStart >= v.pickup.windowStart, { path: ["dropoff", "windowStart"], message: "Delivery can't be before pickup" });
+      .refine((v) => v.dropoff.windowStart >= v.pickup.windowStart, { path: ["dropoff", "windowStart"], message: "Delivery can't be before pickup" })
+      .superRefine(async (v, ctx) => {
+        const lookup = options.zipStates ? await options.zipStates([v.pickup.postalCode, v.dropoff.postalCode]) : undefined;
+        for (const issue of [...scheduleIssues(v.pickup, v.dropoff, today), ...routeIssues(v.pickup, v.dropoff, category, lookup)]) ctx.addIssue({ code: "custom", path: issue.path, message: issue.message });
+      });
   }
   return z.object({
-    title: z.string().trim().min(4, "Give the load a short title").max(100, "Keep it under 100 characters"),
-    notes: z.string().trim().max(2000, "Keep notes under 2,000 characters"),
+    title: policyText({ label: "a short title", min: 4, max: 100, required: true, minMessage: "Give the load a short title" }),
+    notes: policyText({ label: "notes", max: 2000, multiline: true }),
     targetPrice: z
       .string()
       .trim()
@@ -84,6 +93,8 @@ export function toPayload(values: WizardValues, publish: boolean, leadId?: strin
     windowStart: s.windowStart,
     windowEnd: nonEmpty(s.windowEnd),
     notes: nonEmpty(s.notes),
+    ...(typeof s.lat === "number" && typeof s.lng === "number" ? { lat: s.lat, lng: s.lng } : {}),
+    ...(s.placeId ? { placeId: s.placeId } : {}),
   });
   const price = values.targetPrice.replace(/,/g, "").trim();
   return {
@@ -116,6 +127,10 @@ export function detailsFor(category: LoadCategory, current: Record<string, unkno
     }
     base[f.name] = typeof v === "number" ? String(v) : v;
   }
+  for (const f of fieldsOf(category)) {
+    const v = current[otherKey(f.name)];
+    if (hasOther(f) && typeof v === "string") base[otherKey(f.name)] = v;
+  }
   return base;
 }
 
@@ -123,7 +138,11 @@ export function suggestTitle(values: WizardValues) {
   if (!values.category) return "";
   const cat = categories.find((c) => c.key === values.category);
   const d = values.details;
-  const s = (k: string) => (typeof d[k] === "string" || typeof d[k] === "number" ? String(d[k]).trim() : "");
+  const s = (k: string) => {
+    const v = typeof d[k] === "string" || typeof d[k] === "number" ? String(d[k]).trim() : "";
+    const other = typeof d[`${k}Other`] === "string" ? String(d[`${k}Other`]).trim() : "";
+    return v === "Other" && other ? other : v;
+  };
   const vehicle = [s("year"), s("make"), s("model")].filter(Boolean).join(" ");
   const route = values.pickup.city && values.dropoff.city ? ` to ${values.dropoff.city.trim()}` : "";
   let lead = "";

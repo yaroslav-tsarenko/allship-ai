@@ -9,7 +9,7 @@ const carPayload = (over: Record<string, unknown> = {}) => ({
   category: "car_or_light_truck",
   pickup: stop(),
   dropoff: stop({ postalCode: "80202", city: "Denver", state: "CO", windowStart: "2026-10-14" }),
-  details: { year: "2019", make: "Toyota", model: "RAV4", condition: "Runs and drives", trailer: "Open trailer", modified: false, convertible: false },
+  details: { year: "2019", make: "Toyota", model: "RAV4", bodyType: "SUV or crossover", condition: "Runs and drives", trailer: "Open trailer", modified: false },
   title: "",
   notes: "  Gate code 1234 ",
   ...over,
@@ -63,7 +63,7 @@ describe("mapPublicLoad", () => {
       {
         category: "freight",
         pickup: stop(),
-        dropoff: stop({ windowStart: "2026-10-11" }),
+        dropoff: stop({ postalCode: "80202", city: "Denver", state: "CO", windowStart: "2026-10-11" }),
         details: { description: "Auto parts", quantity: "4", weight: "1800", length: "48", width: "40", height: "50", units: ["Pallets"], hazardous: true, freightClass: "" },
         title: "",
         notes: "",
@@ -83,10 +83,10 @@ describe("step validation", () => {
     expect(stepSchema("type", "", vehicleChoices).safeParse({ category: "freight" }).success).toBe(false);
   });
 
-  it("validates ZIP, state and date order on the location step", () => {
-    const schema = locationSchema("2026-10-04");
-    expect(schema.safeParse({ pickup: stop(), dropoff: stop({ windowStart: "2026-10-12" }) }).success).toBe(true);
-    const bad = schema.safeParse({ pickup: stop({ postalCode: "7870", state: "Texas" }), dropoff: stop({ windowStart: "2026-10-12", windowEnd: "2026-10-11" }) });
+  it("validates ZIP, state and date order on the location step", async () => {
+    const schema = locationSchema("2026-10-04", "car_or_light_truck");
+    expect((await schema.safeParseAsync({ pickup: stop(), dropoff: stop({ postalCode: "80202", city: "Denver", state: "CO", windowStart: "2026-10-12" }) })).success).toBe(true);
+    const bad = await schema.safeParseAsync({ pickup: stop({ postalCode: "7870", state: "Texas" }), dropoff: stop({ windowStart: "2026-10-12", windowEnd: "2026-10-11" }) });
     expect(bad.success).toBe(false);
     const paths = bad.error!.issues.map((i) => i.path.join("."));
     expect(paths).toEqual(expect.arrayContaining(["pickup.postalCode", "pickup.state", "dropoff.windowEnd"]));

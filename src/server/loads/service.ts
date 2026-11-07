@@ -2,7 +2,10 @@ import "server-only";
 import { and, asc, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { categories } from "@/content/categories";
 import { detailsSchema, LOAD_DETAILS_VERSION } from "@/features/loads/spec";
+import { addDays, routeIssues, scheduleIssues } from "@/features/loads/route-rules";
 import { loadInputSchema, type LoadInput } from "@/features/loads/schema";
+import { cleanDetails } from "@/features/loads/wizard-model";
+import { zipState } from "@/server/geo/zip";
 import { ActionError } from "@/server/actions/safe-action";
 import { assertShipper, type Actor } from "@/server/actor";
 import { db } from "@/server/db/client";
@@ -35,13 +38,20 @@ export async function transitionLoad(
   await tx.insert(loadEvent).values({ loadId: current.id, type: "status_changed", fromStatus: current.status, toStatus: to, actorId: actor.userId, payload });
 }
 
-function parseInput(raw: LoadInput) {
-  const input = loadInputSchema.parse(raw);
-  const details = detailsSchema(input.category).safeParse(input.details);
+function parseInput(raw: LoadInput, now = new Date()) {
+  const parsed = loadInputSchema.safeParse(raw);
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
+    throw new ActionError(first ? `${first.path.join(" ") || "Load"}: ${first.message}` : "Check the load and try again.");
+  }
+  const input = parsed.data;
+  const details = detailsSchema(input.category).safeParse(cleanDetails(input.details));
   if (!details.success) {
     const first = details.error.issues[0];
     throw new ActionError(first ? `${String(first.path[0] ?? "Details")}: ${first.message}` : "Check the load details.");
   }
+  const issue = [...routeIssues(input.pickup, input.dropoff, input.category, zipState), ...scheduleIssues(input.pickup, input.dropoff, addDays(now.toISOString().slice(0, 10), -1))][0];
+  if (issue) throw new ActionError(`${issue.path[0] === "pickup" ? "Pickup" : "Delivery"}: ${issue.message}`);
   return { input, details: details.data };
 }
 

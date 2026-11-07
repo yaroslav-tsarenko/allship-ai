@@ -4,22 +4,24 @@ import { useMemo, useState } from "react";
 import { Controller, get, useFormContext, useWatch } from "react-hook-form";
 import { Chip, ChipSet } from "@/components/ui/chip";
 import { Icon } from "@/components/ui/icon";
-import { closeIcon, editIcon, searchIcon, tripOriginIcon, locationOnIcon } from "@/components/ui/icons.generated";
+import { closeIcon, editIcon, infoIcon, searchIcon, tripOriginIcon, locationOnIcon } from "@/components/ui/icons.generated";
 import { SelectField } from "@/components/ui/select-field";
 import { Switch } from "@/components/ui/switch";
 import { TextArea } from "@/components/ui/text-area";
 import { TextField } from "@/components/ui/text-field";
 import { categories, categoryGroups, type CategoryGroup } from "@/content/categories";
 import { cn } from "@/lib/cn";
+import { StopLocationFields } from "@/features/location/location-field";
 import { formatUsd } from "@/lib/money";
 import type { LoadCategory } from "@/server/db/schema/enums";
 import { categoryIcons, formatWindow } from "./presentation";
-import { US_STATES } from "./schema";
-import { describeDetail, loadSpecs, type FieldSpec } from "./spec";
+import { addDays, localToday, MAX_DAYS_AHEAD } from "./route-rules";
+import { useLiveRevalidation } from "./live-validation";
+import { MakeField, ModelField, VinField, YearField } from "@/features/vehicles/vehicle-fields";
+import { describeDetail, detailHints, hasOther, loadSpecs, numberHelp, OTHER, otherKey, type FieldSpec } from "./spec";
 import { biddingDayOptions, type WizardValues } from "./wizard-model";
 
 const groupOrder: CategoryGroup[] = ["vehicles", "moving", "freight", "trucks"];
-const stateOptions = US_STATES.map(([value, name]) => ({ value, label: `${name} (${value})` }));
 
 export function CategoryStep({ onPick }: { onPick: (category: LoadCategory) => void }) {
   const { control, formState } = useFormContext<WizardValues>();
@@ -104,15 +106,26 @@ export function CategoryStep({ onPick }: { onPick: (category: LoadCategory) => v
   );
 }
 
+const RESERVE = "\u00a0";
+
+function OtherText({ name }: { name: string }) {
+  const { register, formState } = useFormContext<WizardValues>();
+  const path = `details.${otherKey(name)}` as const;
+  const error = get(formState.errors, path)?.message as string | undefined;
+  return <TextField label="What is it?" required maxLength={80} supportingText="A few words carriers can price, like “pool table”." error={error} className="mt-3" {...register(path)} />;
+}
+
 function DetailField({ field }: { field: FieldSpec }) {
   const { register, control, formState } = useFormContext<WizardValues>();
   const name = `details.${field.name}` as const;
   const error = get(formState.errors, name)?.message as string | undefined;
   const label = field.label;
+  const current = useWatch({ control, name });
+  const showOther = hasOther(field) && (Array.isArray(current) ? current.includes(OTHER) : current === OTHER);
 
   switch (field.kind) {
     case "text":
-      return <TextField label={label} required={field.required} maxLength={field.maxLength} supportingText={field.placeholder ? `For example, ${field.placeholder}` : field.help} error={error} {...register(name)} />;
+      return <TextField label={label} required={field.required} maxLength={field.maxLength} supportingText={field.placeholder ? `For example, ${field.placeholder}` : (field.help ?? RESERVE)} error={error} {...register(name)} />;
     case "number":
       return (
         <TextField
@@ -123,16 +136,27 @@ function DetailField({ field }: { field: FieldSpec }) {
           min={field.min}
           max={field.max}
           step={field.integer ? 1 : "any"}
-          supportingText={field.help}
+          supportingText={numberHelp(field)}
           trailing={field.unit ? <span className="pr-3 text-body-lg">{field.unit}</span> : undefined}
           error={error}
           {...register(name)}
         />
       );
     case "year":
-      return <TextField label={label} required={field.required} inputMode="numeric" type="number" min={1900} max={new Date().getFullYear() + 1} error={error} {...register(name)} />;
+      return <YearField prefix="details" name={field.name} label={label} required={field.required} min={field.min} />;
+    case "make":
+      return <MakeField prefix="details" name={field.name} label={label} required={field.required} catalog={field.catalog} />;
+    case "model":
+      return <ModelField prefix="details" name={field.name} label={label} required={field.required} catalog={field.catalog} />;
+    case "vin":
+      return <VinField prefix="details" name={field.name} label={label} help={field.help} fill={["year", "make", "model", "bodyType"]} />;
     case "select":
-      return <SelectField label={label} required={field.required} options={field.options} supportingText={field.help} error={error} {...register(name)} />;
+      return (
+        <div>
+          <SelectField label={label} required={field.required} options={field.options} supportingText={field.help ?? RESERVE} error={error} {...register(name)} />
+          {showOther && <OtherText name={field.name} />}
+        </div>
+      );
     case "multiselect":
       return (
         <Controller
@@ -141,7 +165,7 @@ function DetailField({ field }: { field: FieldSpec }) {
           render={({ field: f }) => {
             const value = Array.isArray(f.value) ? (f.value as string[]) : [];
             return (
-              <fieldset className="flex flex-col gap-2" aria-invalid={error ? true : undefined}>
+              <fieldset className="flex flex-col gap-2 outline-none" aria-invalid={error ? true : undefined} tabIndex={-1}>
                 <legend className="mb-2 text-body-md text-on-surface-variant">
                   {label}
                   {field.required && <span aria-hidden="true"> *</span>}
@@ -162,6 +186,7 @@ function DetailField({ field }: { field: FieldSpec }) {
                     {error}
                   </p>
                 )}
+                {showOther && <OtherText name={field.name} />}
               </fieldset>
             );
           }}
@@ -178,10 +203,28 @@ function DetailField({ field }: { field: FieldSpec }) {
   }
 }
 
-const wide = (f: FieldSpec) => f.kind === "multiselect" || f.kind === "switch" || (f.kind === "text" && (f.maxLength ?? 0) > 80) || f.label.length > 34;
+function DetailHints({ category }: { category: LoadCategory }) {
+  const { control } = useFormContext<WizardValues>();
+  const details = useWatch({ control, name: "details" }) as Record<string, unknown> | undefined;
+  const hints = detailHints(category, details ?? {});
+  if (!hints.length) return null;
+  return (
+    <div role="status" className="flex items-start gap-3 rounded-md bg-tertiary-container p-4 text-on-tertiary-container">
+      <Icon icon={infoIcon} size={20} className="mt-0.5 shrink-0" />
+      <div className="flex flex-col gap-1 text-body-md">
+        {hints.map((h) => (
+          <p key={h}>{h}</p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const wide = (f: FieldSpec) => f.kind === "multiselect" || f.kind === "switch" || f.kind === "vin" || (f.kind === "text" && (f.maxLength ?? 0) > 80) || f.label.length > 34;
 
 export function DetailsStep({ category }: { category: LoadCategory }) {
   const sections = loadSpecs[category];
+  useLiveRevalidation("details");
   return (
     <div className="flex flex-col gap-8">
       {sections.map((section) => (
@@ -199,36 +242,32 @@ export function DetailsStep({ category }: { category: LoadCategory }) {
           </div>
         </section>
       ))}
+      <DetailHints category={category} />
     </div>
   );
 }
 
-function StopFields({ prefix, title, icon, minDate }: { prefix: "pickup" | "dropoff"; title: string; icon: typeof tripOriginIcon; minDate: string }) {
+function StopFields({ prefix, title, icon, minDate, maxDate }: { prefix: "pickup" | "dropoff"; title: string; icon: typeof tripOriginIcon; minDate: string; maxDate: string }) {
   const { register, formState } = useFormContext<WizardValues>();
   const err = (k: string) => get(formState.errors, `${prefix}.${k}`)?.message as string | undefined;
   const pickup = prefix === "pickup";
   return (
-    <fieldset className="flex flex-col gap-5">
+    <fieldset className="flex min-w-0 flex-col gap-5">
       <legend className="mb-4 flex items-center gap-2 text-title-md text-on-surface">
         <Icon icon={icon} size={20} className={pickup ? "text-primary" : "text-tertiary"} filled />
         {title}
       </legend>
-      <TextField label="Street address" required autoComplete={`section-${prefix} street-address`} error={err("address")} {...register(`${prefix}.address`)} />
-      <div className="grid gap-x-4 gap-y-5 medium:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px]">
-        <TextField label="City" required autoComplete={`section-${prefix} address-level2`} error={err("city")} {...register(`${prefix}.city`)} />
-        <SelectField label="State" required options={stateOptions} placeholder="Choose a state" error={err("state")} {...register(`${prefix}.state`)} />
-        <TextField label="ZIP code" required inputMode="numeric" autoComplete={`section-${prefix} postal-code`} maxLength={10} error={err("postalCode")} {...register(`${prefix}.postalCode`)} />
-      </div>
+      <StopLocationFields prefix={prefix} label={pickup ? "Pickup address" : "Delivery address"} addressRequired addressHelp="Only the carrier you book sees it. Bidders see the city and ZIP." />
       <div className="grid gap-x-4 gap-y-5 medium:grid-cols-2">
-        <TextField label={pickup ? "Earliest pickup" : "Earliest delivery"} type="date" required min={minDate} error={err("windowStart")} {...register(`${prefix}.windowStart`)} />
-        <TextField label={pickup ? "Latest pickup" : "Latest delivery"} type="date" min={minDate} supportingText="Optional. A wider window gets more bids." error={err("windowEnd")} {...register(`${prefix}.windowEnd`)} />
+        <TextField label={pickup ? "Earliest pickup" : "Earliest delivery"} type="date" required min={minDate} max={maxDate} supportingText={pickup ? "First day the load is ready" : "First day someone can receive it"} error={err("windowStart")} {...register(`${prefix}.windowStart`)} />
+        <TextField label={pickup ? "Latest pickup" : "Latest delivery"} type="date" min={minDate} max={maxDate} supportingText="Optional. A wider window gets more bids." error={err("windowEnd")} {...register(`${prefix}.windowEnd`)} />
       </div>
       <TextArea
         label={pickup ? "Pickup notes" : "Delivery notes"}
         rows={2}
         maxLength={500}
         showCount
-        supportingText={pickup ? "Gate codes, parking, loading dock hours" : "Who receives it, access limits, call-ahead"}
+        supportingText={pickup ? "Gate codes, parking, loading dock hours. No phone numbers, they're shared after booking." : "Access limits, receiving hours. No phone numbers, they're shared after booking."}
         error={err("notes")}
         {...register(`${prefix}.notes`)}
       />
@@ -237,14 +276,16 @@ function StopFields({ prefix, title, icon, minDate }: { prefix: "pickup" | "drop
 }
 
 export function RouteStep() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday();
+  const maxDate = addDays(today, MAX_DAYS_AHEAD);
   const { control } = useFormContext<WizardValues>();
   const pickupStart = useWatch({ control, name: "pickup.windowStart" });
+  useLiveRevalidation("pickup", "dropoff");
   return (
     <div className="flex flex-col gap-10">
-      <StopFields prefix="pickup" title="Pickup" icon={tripOriginIcon} minDate={today} />
+      <StopFields prefix="pickup" title="Pickup" icon={tripOriginIcon} minDate={today} maxDate={maxDate} />
       <div className="border-t border-outline-variant" />
-      <StopFields prefix="dropoff" title="Delivery" icon={locationOnIcon} minDate={pickupStart || today} />
+      <StopFields prefix="dropoff" title="Delivery" icon={locationOnIcon} minDate={pickupStart && pickupStart >= today ? pickupStart : today} maxDate={addDays(maxDate, 60)} />
     </div>
   );
 }
@@ -271,7 +312,7 @@ export function ReviewStep({ onEdit, suggestion, onUseSuggestion }: { onEdit: (s
   const category = values.category as LoadCategory;
   const cat = categories.find((c) => c.key === category);
   const err = (k: string) => get(formState.errors, k)?.message as string | undefined;
-  const rows = (loadSpecs[category] ?? []).flatMap((s) => s.fields).map((f) => ({ label: f.label, value: describeDetail(f, values.details?.[f.name]) })).filter((r) => r.value);
+  const rows = (loadSpecs[category] ?? []).flatMap((s) => s.fields).map((f) => ({ label: f.label, value: describeDetail(f, values.details?.[f.name], values.details) })).filter((r) => r.value);
   const price = values.targetPrice?.replace(/,/g, "");
   const showSuggestion = suggestion && suggestion !== values.title?.trim();
 
@@ -287,7 +328,7 @@ export function ReviewStep({ onEdit, suggestion, onUseSuggestion }: { onEdit: (s
             </div>
           )}
         </div>
-        <TextArea label="Notes for carriers" rows={4} maxLength={2000} showCount supportingText="Anything that affects the price: tight access, special handling, flexible dates." error={err("notes")} {...register("notes")} />
+        <TextArea label="Notes for carriers" rows={4} maxLength={2000} showCount supportingText="Anything that affects the price: tight access, special handling, flexible dates. Contact details are shared after booking." error={err("notes")} {...register("notes")} />
         <div className="grid gap-x-4 gap-y-5 medium:grid-cols-2">
           <TextField
             label="Target price"

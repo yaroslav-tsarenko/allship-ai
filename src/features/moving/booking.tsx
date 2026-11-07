@@ -10,13 +10,13 @@ import { SegmentedButton } from "@/components/ui/segmented-button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextField } from "@/components/ui/text-field";
 import { Turnstile } from "@/features/auth/turnstile";
+import { AreaField } from "@/features/location/area-field";
 import { findMatchesAction } from "@/server/actions/matcher";
 import type { Match, MatchRoute } from "@/server/matcher/service";
 import { BookDialog } from "./book-dialog";
 import { MatchList } from "./match-list";
 import { bedroomVolumes } from "./pricing";
 import { moveRequestSchema, moveTypes, type MoveRequestData, type MoveRequestInput } from "./schema";
-import { PlaceField } from "./place-field";
 
 export type BookingIcons = {
   search: ReactNode;
@@ -137,7 +137,7 @@ export function MovingBooking({ icons, feePercent }: { icons: BookingIcons; feeP
             control={control}
             name="from"
             render={({ field }) => (
-              <PlaceField label="Moving from" placeholder="ZIP or city, state" leading={icons.from} value={field.value} onValueChange={field.onChange} onBlur={field.onBlur} ref={field.ref} name={field.name} error={errors.from?.message} required />
+              <AreaField label="Moving from" placeholder="ZIP or city, state" leading={icons.from} value={field.value} onValueChange={field.onChange} onBlur={field.onBlur} ref={field.ref} name={field.name} error={errors.from?.message} required supportingText="ZIP code or city, state" />
             )}
           />
           <button type="button" onClick={swap} aria-label="Swap from and to" className="state-layer hidden size-14 cursor-pointer items-center justify-center rounded-full text-on-surface-variant medium:inline-flex">
@@ -147,7 +147,7 @@ export function MovingBooking({ icons, feePercent }: { icons: BookingIcons; feeP
             control={control}
             name="to"
             render={({ field }) => (
-              <PlaceField label="Moving to" placeholder="ZIP or city, state" leading={icons.to} value={field.value} onValueChange={field.onChange} onBlur={field.onBlur} ref={field.ref} name={field.name} error={errors.to?.message} required />
+              <AreaField label="Moving to" placeholder="ZIP or city, state" leading={icons.to} value={field.value} onValueChange={field.onChange} onBlur={field.onBlur} ref={field.ref} name={field.name} error={errors.to?.message} required supportingText="ZIP code or city, state" />
             )}
           />
         </div>

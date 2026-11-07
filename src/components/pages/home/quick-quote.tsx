@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import type { ComboboxInputProps } from "@/components/ui/combobox";
+import { AreaField } from "@/features/location/area-field";
 
 const modes = [
   { value: "moving", label: "Moving", path: "/moving", hint: "Instant prices from movers’ published rates. No sign-up to see them." },
@@ -16,16 +18,26 @@ const field =
 const floating =
   "pointer-events-none absolute top-4 left-5 origin-left text-body-lg text-on-surface-variant transition-transform duration-(--duration-short4) ease-standard peer-focus:-translate-y-2.5 peer-focus:scale-75 peer-focus:text-primary peer-[:not(:placeholder-shown)]:-translate-y-2.5 peer-[:not(:placeholder-shown)]:scale-75";
 
+function QuickInput({ label, invalid, ...props }: ComboboxInputProps) {
+  return (
+    <>
+      <input {...props} aria-invalid={invalid || undefined} className={field} />
+      <label htmlFor={props.id} className={floating}>
+        {label}
+      </label>
+    </>
+  );
+}
+
 export function QuickQuote({ arrowIcon, swapIcon, id = "qq", track = "hero_quick_quote", label = "Quick quote" }: { arrowIcon: React.ReactNode; swapIcon: React.ReactNode; id?: string; track?: string; label?: string }) {
   const [mode, setMode] = useState<Mode>("moving");
   const current = modes.find((m) => m.value === mode) ?? modes[0];
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
 
-  const swap = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const form = e.currentTarget.form;
-    const from = form?.elements.namedItem("from");
-    const to = form?.elements.namedItem("to");
-    if (!(from instanceof HTMLInputElement) || !(to instanceof HTMLInputElement)) return;
-    [from.value, to.value] = [to.value, from.value];
+  const swap = () => {
+    setFrom(to);
+    setTo(from);
   };
 
   return (
@@ -42,12 +54,9 @@ export function QuickQuote({ arrowIcon, swapIcon, id = "qq", track = "hero_quick
           </label>
         ))}
       </fieldset>
-      <div className="mt-4 grid overflow-hidden rounded-lg border border-outline-variant bg-surface-container-lowest shadow-elevation-1 medium:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] medium:items-center medium:rounded-[28px]">
+      <div className="mt-4 grid rounded-lg border border-outline-variant bg-surface-container-lowest shadow-elevation-1 medium:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] medium:items-center medium:rounded-[28px]">
         <div className="relative">
-          <input id={`${id}-from`} name="from" maxLength={120} autoComplete="address-level2" placeholder="ZIP or city, state" className={field} />
-          <label htmlFor={`${id}-from`} className={floating}>
-            From
-          </label>
+          <AreaField id={`${id}-from`} name="from" label="From" maxLength={120} placeholder="ZIP or city, state" value={from} onValueChange={setFrom} inputComponent={QuickInput} />
         </div>
         <button
           type="button"
@@ -59,10 +68,7 @@ export function QuickQuote({ arrowIcon, swapIcon, id = "qq", track = "hero_quick
           {swapIcon}
         </button>
         <div className="relative border-t border-outline-variant medium:border-t-0 medium:border-l">
-          <input id={`${id}-to`} name="to" maxLength={120} autoComplete="off" placeholder="ZIP or city, state" className={field} />
-          <label htmlFor={`${id}-to`} className={floating}>
-            To
-          </label>
+          <AreaField id={`${id}-to`} name="to" label="To" maxLength={120} placeholder="ZIP or city, state" value={to} onValueChange={setTo} inputComponent={QuickInput} />
         </div>
         <div className="p-2 medium:pl-0">
           <button

@@ -11,7 +11,9 @@ import * as schema from "../src/server/db/schema";
 import type { LoadCategory, LoadStatus } from "../src/server/db/schema/enums";
 import type { LoadStop } from "../src/server/db/schema/loads";
 import { detailsSchema, LOAD_DETAILS_VERSION } from "../src/features/loads/spec";
+import { routeIssues } from "../src/features/loads/route-rules";
 import { loadInputSchema } from "../src/features/loads/schema";
+import { zipState } from "../src/server/geo/zip";
 import { priceMove, validateTiers, volumeForBedrooms, type RateTier, type ServiceRates } from "../src/features/moving/pricing";
 import { canTransition, type TransitionActor } from "../src/server/loads/transitions";
 import { feeFor, formatUsd } from "../src/lib/money";
@@ -429,6 +431,8 @@ async function createLoad(c: Ctx, plan: LoadPlan) {
     publish: Boolean(plan.publishedAt),
   });
   if (!input.success) throw new Error(`${plan.code} is not a valid load input: ${JSON.stringify(input.error.issues)}`);
+  const routeProblems = routeIssues(plan.pickup, plan.dropoff, plan.category, zipState);
+  if (routeProblems.length) throw new Error(`${plan.code} route fails src/features/loads/route-rules.ts: ${JSON.stringify(routeProblems)}`);
   const details = detailsSchema(plan.category).safeParse(plan.details);
   if (!details.success) throw new Error(`${plan.code} details fail src/features/loads/spec.ts: ${JSON.stringify(details.error.issues)}`);
   const extraKeys = Object.keys(plan.details).filter((k) => !(k in details.data));
@@ -903,7 +907,7 @@ async function seedMarketplace(c: Ctx) {
     title: "2019 Honda CR-V to Denver",
     pickup: stop("1840 N Clybourn Ave", "Chicago", "IL", "60614", 41.9137, -87.6555, ahead(12 * DAY)),
     dropoff: stop("2300 Larimer St", "Denver", "CO", "80205", 39.7569, -104.9872, ahead(16 * DAY)),
-    details: { year: 2019, make: "Honda", model: "CR-V EX", condition: "Runs and drives", trailer: "Open trailer", modified: false, convertible: false },
+    details: { year: 2019, make: "Honda", model: "CR-V EX", bodyType: "SUV or crossover", condition: "Runs and drives", trailer: "Open trailer", modified: false },
     notes: "Keys stay with the building concierge. Street parking only at pickup.",
     targetPrice: 1100,
     distanceMiles: 1003,
@@ -1076,7 +1080,7 @@ async function seedMarketplace(c: Ctx) {
     title: "Tesla Model 3 to Detroit, enclosed",
     pickup: stop("455 E Waterside Dr", "Chicago", "IL", "60601", 41.8869, -87.6156, ago(30 * HOUR)),
     dropoff: stop("1001 Woodward Ave", "Detroit", "MI", "48226", 42.3321, -83.0466, ago(5 * HOUR)),
-    details: { year: 2021, make: "Tesla", model: "Model 3 Long Range", condition: "Runs and drives", trailer: "Enclosed trailer", modified: false, convertible: false },
+    details: { year: 2021, make: "Tesla", model: "Model 3 Long Range", bodyType: "Sedan", condition: "Runs and drives", trailer: "Enclosed trailer", modified: false },
     notes: "Charged to 80%. Please don't use the frunk for tie-downs.",
     distanceMiles: 283,
     createdAt: deliveredPublished,
@@ -1192,7 +1196,7 @@ async function seedMarketplace(c: Ctx) {
     title: "12 ft utility trailer to Madison",
     pickup: stop("2601 W Cermak Rd", "Chicago", "IL", "60608", 41.852, -87.6908, ahead(1 * DAY)),
     dropoff: stop("2 E Main St", "Madison", "WI", "53703", 43.0747, -89.3841, ahead(2 * DAY)),
-    details: { type: "Utility", length: 12, width: 6, height: 4, weight: 1800, method: "Towed", brakesLights: true },
+    details: { type: "Utility", hitch: "Bumper pull", length: 12, width: 6, height: 4, weight: 1800, method: "Towed", brakesLights: true },
     distanceMiles: 147,
     createdAt: cancelledPublished,
     publishedAt: cancelledPublished,
@@ -1229,7 +1233,7 @@ async function seedMarketplace(c: Ctx) {
     title: "Airstream travel trailer to Phoenix",
     pickup: stop("2700 Post Oak Blvd", "Houston", "TX", "77056", 29.7419, -95.4607, ahead(6 * DAY)),
     dropoff: stop("1 E Washington St", "Phoenix", "AZ", "85004", 33.4484, -112.074, ahead(9 * DAY)),
-    details: { rvType: "Travel trailer", make: "Airstream Flying Cloud 25FB", length: 25, width: 8, height: 10, weight: 7300, method: "Towed", condition: "Runs and drives" },
+    details: { rvType: "Travel trailer", year: 2020, make: "Airstream", model: "Flying Cloud 25FB", length: 25, width: 8, height: 10, weight: 7300, method: "Towed", condition: "Runs and drives" },
     notes: "Tires replaced this year. Weight distribution hitch included.",
     distanceMiles: 1176,
     createdAt: rvPublished,

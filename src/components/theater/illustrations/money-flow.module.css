@@ -1,0 +1,32 @@
+.dot {
+  animation: travel 3.2s linear infinite;
+  opacity: 0;
+}
+
+.late {
+  animation-delay: 1.6s;
+}
+
+@keyframes travel {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(var(--travel));
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    animation: none;
+    display: none;
+  }
+}

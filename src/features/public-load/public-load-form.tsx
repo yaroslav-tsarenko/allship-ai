@@ -25,7 +25,7 @@ import { InboxScreen } from "./inbox-screen";
 import { LocationStep } from "./location-step";
 import { emailSchema, emptyValues, formConfigs, presetFromSearch, stepCopy, stepSchema, summarize, titleFor, type FormKind, type PublicLoadValues, type StopValues } from "./model";
 import { TypeStep } from "./type-step";
-import { lookupZip } from "./zip";
+import { lookupZip, zipStates } from "./zip";
 
 const GoogleButton = dynamic(() => import("@/features/auth/google-button").then((m) => m.GoogleButton), { ssr: false });
 
@@ -77,11 +77,12 @@ export function PublicLoadForm({ kind, googleEnabled }: { kind: FormKind; google
   const partialFor = useRef<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const hydrated = useRef(false);
   const onToken = useCallback((t: string | null) => setCaptcha(t), []);
 
   const resolver: Resolver<PublicLoadValues> = useCallback(
-    (values, ctx, options) => (zodResolver(stepSchema(steps[stepRef.current]!, values.category, config.choices) as never) as unknown as Resolver<PublicLoadValues>)(values, ctx, options),
+    (values, ctx, options) => (zodResolver(stepSchema(steps[stepRef.current]!, values.category, config.choices, undefined, zipStates) as never) as unknown as Resolver<PublicLoadValues>)(values, ctx, options),
     [steps, config.choices],
   );
   const form = useForm<PublicLoadValues>({ resolver, defaultValues: emptyValues(fixed), mode: "onTouched", reValidateMode: "onChange", shouldUnregister: false });
@@ -182,7 +183,7 @@ export function PublicLoadForm({ kind, googleEnabled }: { kind: FormKind; google
   };
 
   const focusFirstError = () => {
-    window.requestAnimationFrame(() => topRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus());
+    window.requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus());
   };
 
   const next = async () => {
@@ -289,6 +290,7 @@ export function PublicLoadForm({ kind, googleEnabled }: { kind: FormKind; google
   return (
     <FormProvider {...form}>
       <form
+        ref={formRef}
         noValidate
         onFocusCapture={start}
         onSubmit={(e) => {
@@ -329,7 +331,7 @@ export function PublicLoadForm({ kind, googleEnabled }: { kind: FormKind; google
                   Title and additional details
                 </h3>
                 <TextField label="Title" maxLength={100} supportingText={suggestion ? `Leave empty to use “${suggestion}”` : "Carriers see this first"} error={err("title")} {...form.register("title")} />
-                <TextArea label="Additional details" rows={4} maxLength={2000} showCount supportingText="Anything that affects the price: tight access, special handling, flexible dates." error={err("notes")} {...form.register("notes")} />
+                <TextArea label="Additional details" rows={4} maxLength={2000} showCount supportingText="Anything that affects the price: tight access, special handling, flexible dates. Contact details are shared after booking." error={err("notes")} {...form.register("notes")} />
               </section>
             </div>
           )}

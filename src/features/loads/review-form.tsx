@@ -9,6 +9,7 @@ import { Icon } from "@/components/ui/icon";
 import { starIcon } from "@/components/ui/icons.generated";
 import { TextArea } from "@/components/ui/text-area";
 import { cn } from "@/lib/cn";
+import { checkText } from "@/lib/validation/text-policy";
 import { createReviewAction } from "@/server/actions/trips";
 
 const ratingWords = ["", "Poor", "Fair", "Good", "Very good", "Excellent"];
@@ -29,14 +30,18 @@ export function ReviewForm({ loadId, carrierName }: { loadId: string; carrierNam
   const [hover, setHover] = useState(0);
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | undefined>();
+  const [bodyError, setBodyError] = useState<string | undefined>();
   const { executeAsync, isPending } = useAction(createReviewAction);
   const shown = hover || rating;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rating) return setError("Choose a rating from 1 to 5 stars");
+    const issue = checkText(body, { contacts: false });
+    if (issue) return setBodyError(issue.message);
     const res = await executeAsync({ loadId, rating, body: body.trim() || undefined });
     if (res?.serverError) return void toast.error(res.serverError);
+    if (res?.validationErrors) return setBodyError(res.validationErrors.body?._errors?.[0] ?? "Check your review and try again.");
     toast.success("Thanks, your review is posted.");
     router.refresh();
   };
@@ -80,7 +85,19 @@ export function ReviewForm({ loadId, carrierName }: { loadId: string; carrierNam
           </p>
         )}
       </fieldset>
-      <TextArea label="Tell other shippers about it (optional)" rows={3} maxLength={2000} value={body} onChange={(e) => setBody(e.target.value)} supportingText="Was pickup on time? How was communication and handling?" />
+      <TextArea
+        label="Tell other shippers about it (optional)"
+        rows={3}
+        maxLength={2000}
+        value={body}
+        onChange={(e) => {
+          setBody(e.target.value);
+          setBodyError(undefined);
+        }}
+        onBlur={() => setBodyError(checkText(body, { contacts: false })?.message)}
+        error={bodyError}
+        supportingText="Was pickup on time? How was communication and handling?"
+      />
       <Button type="submit" loading={isPending} className="self-start">
         Post review
       </Button>

@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { categories } from "@/content/categories";
+import { MAX_DAYS_AHEAD, routeIssues } from "@/features/loads/route-rules";
 import { US_STATES } from "@/features/loads/schema";
 import { detailsSchema, emptyDetails } from "@/features/loads/spec";
-import { cleanDetails, suggestTitle, type WizardValues } from "@/features/loads/wizard-model";
+import { cleanDetails, suggestTitle, type WizardValues, type ZipStates } from "@/features/loads/wizard-model";
+import { policyText } from "@/lib/validation/text-policy";
 import type { LoadCategory } from "@/server/db/schema/enums";
 
 export type FormKind = "vehicle" | "moving" | "heavy" | "freight" | "rent";
@@ -87,6 +89,7 @@ function addDays(iso: string, days: number) {
 }
 
 export function stopSchema(minDate: string, label: "pickup" | "delivery") {
+  const maxDate = addDays(minDate, MAX_DAYS_AHEAD + (label === "delivery" ? 60 : 0));
   return z
     .object({
       postalCode: z.string().trim().regex(/^\d{5}$/, "Enter a 5-digit ZIP code"),
@@ -96,7 +99,8 @@ export function stopSchema(minDate: string, label: "pickup" | "delivery") {
       windowStart: z
         .string()
         .regex(isoDate, `Choose a ${label} date`)
-        .refine((v) => v >= minDate, `The ${label} date can't be in the past`),
+        .refine((v) => v >= minDate, `The ${label} date can't be in the past`)
+        .refine((v) => v <= maxDate, "Pick a date within the next 12 months"),
       windowEnd: z.string().default(""),
       lat: z.number().min(-90).max(90).optional(),
       lng: z.number().min(-180).max(180).optional(),
@@ -105,22 +109,24 @@ export function stopSchema(minDate: string, label: "pickup" | "delivery") {
     .refine((s) => !s.windowEnd || (isoDate.test(s.windowEnd) && s.windowEnd >= s.windowStart), { path: ["windowEnd"], message: "Must be on or after the first date" });
 }
 
-export function locationSchema(minDate: string) {
+export function locationSchema(minDate: string, category: LoadCategory | "" = "", zipStates?: ZipStates) {
   return z
     .object({ pickup: stopSchema(minDate, "pickup"), dropoff: stopSchema(minDate, "delivery") })
-    .refine((v) => v.dropoff.windowStart >= v.pickup.windowStart, { path: ["dropoff", "windowStart"], message: "Delivery can't be before pickup" });
+    .refine((v) => v.dropoff.windowStart >= v.pickup.windowStart, { path: ["dropoff", "windowStart"], message: "Delivery can't be before pickup" })
+    .superRefine(async (v, ctx) => {
+      const lookup = zipStates ? await zipStates([v.pickup.postalCode, v.dropoff.postalCode]) : undefined;
+      for (const issue of routeIssues(v.pickup, v.dropoff, category, lookup)) ctx.addIssue({ code: "custom", path: issue.path, message: issue.message });
+    });
 }
+
+const titleSchema = policyText({ label: "a title", max: 100 }).refine((v) => v === "" || v.length >= 4, "Use at least 4 characters, or leave it empty");
+const notesSchema = policyText({ label: "details", max: 2000, multiline: true });
 
 export function detailsStepSchema(category: LoadCategory) {
   return z.object({
     details: z.preprocess(cleanDetails, detailsSchema(category)),
-    title: z
-      .string()
-      .trim()
-      .max(100, "Keep the title under 100 characters")
-      .refine((v) => v === "" || v.length >= 4, "Use at least 4 characters, or leave it empty")
-      .default(""),
-    notes: z.string().trim().max(2000, "Keep details under 2,000 characters").default(""),
+    title: titleSchema.default(""),
+    notes: notesSchema.default(""),
   });
 }
 
@@ -152,9 +158,9 @@ export const contactSchema = z.object({
   smsConsent: z.boolean().default(false),
 });
 
-export function stepSchema(step: StepKey, category: LoadCategory | "", choices: LoadCategory[], minDate = todayIso()) {
+export function stepSchema(step: StepKey, category: LoadCategory | "", choices: LoadCategory[], minDate = todayIso(), zipStates?: ZipStates) {
   if (step === "type") return z.object({ category: z.enum(choices as [LoadCategory, ...LoadCategory[]], { error: "Choose what you're moving" }) });
-  if (step === "location") return locationSchema(minDate);
+  if (step === "location") return locationSchema(minDate, category, zipStates);
   if (step === "details") return category ? detailsStepSchema(category) : z.object({});
   return z.object({ contact: contactSchema });
 }
@@ -166,8 +172,8 @@ export function publicLoadSchema(choices: LoadCategory[], minDate: string) {
       pickup: stopSchema(minDate, "pickup"),
       dropoff: stopSchema(minDate, "delivery"),
       details: z.record(z.string(), z.unknown()),
-      title: z.string().trim().max(100).default(""),
-      notes: z.string().trim().max(2000).default(""),
+      title: titleSchema.default(""),
+      notes: notesSchema.default(""),
     })
     .refine((v) => v.dropoff.windowStart >= v.pickup.windowStart, { path: ["dropoff", "windowStart"], message: "Delivery can't be before pickup" });
 }
@@ -194,7 +200,7 @@ export class PayloadError extends Error {
   }
 }
 
-export function mapPublicLoad(kind: FormKind, raw: unknown, now = new Date()): MappedLoad {
+export function mapPublicLoad(kind: FormKind, raw: unknown, now = new Date(), zipLookup?: (zip: string) => string | null | undefined): MappedLoad {
   const config = formConfigs[kind];
   const minDate = addDays(todayIso(now), -1);
   const parsed = publicLoadSchema(config.choices, minDate).safeParse(raw);
@@ -208,6 +214,8 @@ export function mapPublicLoad(kind: FormKind, raw: unknown, now = new Date()): M
     const issue = details.error.issues[0];
     throw new PayloadError(issue?.message ?? "Check the load details.", `details.${String(issue?.path[0] ?? "")}`);
   }
+  const routeIssue = routeIssues(input.pickup, input.dropoff, input.category, zipLookup)[0];
+  if (routeIssue) throw new PayloadError(routeIssue.message, routeIssue.path.join("."));
   const stop = (s: typeof input.pickup) => ({
     address: s.address,
     city: s.city,
