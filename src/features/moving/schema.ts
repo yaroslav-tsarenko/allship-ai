@@ -60,3 +60,10 @@ export const bookingSchema = z.object({
 });
 
 export type BookingInput = z.input<typeof bookingSchema>;
+
+export const bidRequestSchema = z.object({
+  request: moveRequestSchema,
+  contact: contactSchema,
+  marketingOptIn: z.boolean().default(false),
+  turnstileToken: z.string().max(4096).optional(),
+});

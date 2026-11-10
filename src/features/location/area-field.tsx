@@ -19,8 +19,9 @@ type AreaFieldProps = Omit<TextFieldProps, "value" | "onChange" | "defaultValue"
 type AreaItem = { kind: "google"; s: Suggestion } | { kind: "local"; p: LocalPlace };
 
 export function AreaField({ value, onValueChange, inputComponent, popupClassName, onBlur, ref, ...field }: AreaFieldProps) {
-  const google = useGoogleAvailable();
+  const googleReady = useGoogleAvailable();
   const [typed, setTyped] = useState(false);
+  const google = googleReady && !/^\d+$/.test(value.trim());
   const remote = useGoogleSuggestions(value, google && typed, true);
   const local = useLocalSuggestions(value, !google && typed);
   const items: AreaItem[] = google ? remote.items.map((s) => ({ kind: "google" as const, s })) : local.items.map((p) => ({ kind: "local" as const, p }));
@@ -35,14 +36,14 @@ export function AreaField({ value, onValueChange, inputComponent, popupClassName
         setTyped(true);
       }}
       onFocus={() => {
-        if (google) void loadPlaces(mapsKey);
+        if (googleReady) void loadPlaces(mapsKey);
       }}
       onBlur={onBlur}
       items={items}
       loading={google ? remote.loading : local.loading}
-      minChars={google ? 3 : 2}
+      minChars={google || /^\d/.test(value.trim()) ? 3 : 2}
       itemKey={(i) => (i.kind === "google" ? i.s.id : i.p.label)}
-      renderItem={(i) => (i.kind === "google" ? <SuggestionRow main={i.s.main} secondary={i.s.secondary} /> : i.p.label)}
+      renderItem={(i) => (i.kind === "google" ? <SuggestionRow main={i.s.main} secondary={i.s.secondary} /> : i.p.postalCode ? <SuggestionRow main={i.p.postalCode} secondary={`${i.p.city}, ${i.p.state}`} /> : <SuggestionRow main={i.p.city} secondary={i.p.state} />)}
       onSelectItem={async (i) => {
         setTyped(false);
         if (i.kind === "local") return onValueChange(i.p.label);

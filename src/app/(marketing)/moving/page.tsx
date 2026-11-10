@@ -1,5 +1,4 @@
 import Image from "next/image";
-import Link from "next/link";
 import {
   badgeAngi,
   badgeBbb,
@@ -24,6 +23,7 @@ import {
   infoIcon,
   locationOnIcon,
   lockClockIcon,
+  receiptLongIcon,
   mailIcon,
   nearMeIcon,
   searchIcon,
@@ -46,9 +46,9 @@ import { getMovingProof, type MovingTestimonial } from "@/server/matcher/proof";
 export const revalidate = 3600;
 
 const path = "/moving";
-const title = "Moving Quotes from Verified Movers, Instantly";
+const title = "Compare Moving Quotes from Verified Movers";
 const description =
-  "Enter your move and see instant prices from FMCSA-checked movers' own rates for 1 to 8 bedrooms, with packing, unpacking and storage. Book online and pay into escrow, released after delivery.";
+  "Enter your ZIP codes and home size to compare prices from FMCSA-checked movers for local and long-distance moves. No sign-up to see prices, and your payment stays in escrow until delivery.";
 
 export const metadata = buildMetadata({ title, description, path });
 
@@ -93,6 +93,24 @@ const movingTimeline: TimelineStep[] = [
     when: "After delivery",
     title: "Confirm, then the mover is paid",
     body: `Delivery comes with photos and a signature. It auto-confirms after ${site.autoConfirmHours} hours with no dispute.`,
+  },
+];
+
+const valueProps = [
+  {
+    icon: verifiedIcon,
+    title: "Checked movers only",
+    body: "Every mover's USDOT and operating authority are checked against FMCSA records before they can quote.",
+  },
+  {
+    icon: receiptLongIcon,
+    title: "Itemized prices",
+    body: `Transport, packing and storage line by line, with our ${site.platformFeePercent}% fee shown before you book.`,
+  },
+  {
+    icon: lockClockIcon,
+    title: "Paid after delivery",
+    body: "Your payment waits in escrow and goes to the mover only after you confirm everything arrived.",
   },
 ];
 
@@ -178,11 +196,11 @@ export default async function MovingPage() {
               id="moving-title"
               className="text-display-sm medium:text-display-md mt-3 font-normal tracking-tight text-balance"
             >
-              Move with ease, with the best moving company for your move
+              Compare moving prices from verified movers
             </h1>
             <p className="text-body-lg medium:text-title-lg medium:font-normal mt-4 max-w-[600px] text-pretty text-white/85">
-              Tell us where you&rsquo;re going and how big your home is. Verified movers&rsquo; own rates turn
-              into real prices you can book.
+              Enter two ZIP codes and your home size. See what FMCSA-checked movers charge, book online, and
+              pay only after your things arrive.
             </p>
           </div>
           <div className="medium:mt-10 mt-8">
@@ -202,39 +220,24 @@ export default async function MovingPage() {
             />
           </div>
 
-          <div className="large:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] large:gap-16 mt-12 grid gap-10">
-            <div>
-              <h2 className="text-headline-lg text-on-surface medium:text-display-sm font-normal">
-                Moving, <span className="text-primary">automated</span>
-              </h2>
-              <p className="text-title-lg text-on-surface mt-3 font-normal">
-                AI-powered moves for modern living.
-              </p>
-              <p className="text-body-lg text-on-surface-variant mt-3 max-w-[60ch] text-pretty">
-                Plan your move with instant prices from verified movers, real-time updates on the day, and
-                payment held in escrow until everything is delivered.
-              </p>
-              <ul className="mt-6 flex flex-wrap gap-2" aria-label="Follow AllShip AI">
-                {site.socials.map((s) => (
-                  <li key={s.name}>
-                    <a
-                      href={s.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="state-layer border-outline-variant text-label-lg text-on-surface-variant inline-flex h-10 items-center rounded-sm border px-4 font-medium"
-                    >
-                      {s.name}
-                    </a>
-                  </li>
-                ))}
-              </ul>
+          <ul className="medium:grid-cols-3 mt-12 grid gap-8" aria-label="Why book your move with AllShip AI">
+            {valueProps.map((v) => (
+              <li key={v.title} className="flex gap-4">
+                <span className="bg-primary-container text-on-primary-container flex size-12 shrink-0 items-center justify-center rounded-md">
+                  <Icon icon={v.icon} size={24} />
+                </span>
+                <span>
+                  <span className="text-title-md text-on-surface block">{v.title}</span>
+                  <span className="text-body-md text-on-surface-variant mt-1 block text-pretty">{v.body}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {heroQuote && (
+            <div className="border-primary mt-12 max-w-[760px] border-l-2 pl-6">
+              <TestimonialQuote t={heroQuote} size="lg" />
             </div>
-            {heroQuote && (
-              <div className="border-primary border-l-2 pl-6">
-                <TestimonialQuote t={heroQuote} size="lg" />
-              </div>
-            )}
-          </div>
+          )}
         </Container>
       </section>
 
@@ -283,60 +286,12 @@ export default async function MovingPage() {
         </section>
       )}
 
-      <section aria-labelledby="moving-gallery" className="medium:py-24 py-16">
-        <Container>
-          <SectionHeader
-            id="moving-gallery"
-            title="Our highest standard in residential moving"
-            description="Wrapped furniture, strapped loads and labeled boxes: what a careful move looks like from the inside of the truck."
-          />
-          <div className="mt-10">
-            <MovingGallery items={movingGallery} />
-          </div>
-        </Container>
-      </section>
-
-      {moreQuotes.length > 0 && (
-        <section aria-labelledby="moving-reviews" className="bg-surface-container-low medium:py-24 py-16">
-          <Container>
-            <SectionHeader id="moving-reviews" title="Featured reviews from our customers" />
-            <ul className="medium:grid-cols-2 large:grid-cols-3 mt-10 grid gap-x-10 gap-y-12">
-              {moreQuotes.map((t) => (
-                <li key={t.id} className="border-outline-variant border-t pt-6">
-                  <TestimonialQuote t={t} />
-                </li>
-              ))}
-            </ul>
-          </Container>
-        </section>
-      )}
-
-      <section aria-labelledby="moving-post" className="medium:py-20 py-14">
-        <Container>
-          <div className="bg-secondary-container text-on-secondary-container medium:p-10 large:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] large:items-center grid gap-8 rounded-xl p-6">
-            <div>
-              <h2 id="moving-post" className="text-headline-md font-normal text-balance">
-                Rather have movers bid on your move?
-              </h2>
-              <p className="text-body-lg mt-3 max-w-[60ch] text-pretty">
-                Post your inventory, floors and access details. Verified movers send bids, usually within a
-                few hours, and you pick the one that fits. Posting is free.
-              </p>
-            </div>
-            <div className="large:justify-end flex flex-wrap gap-3">
-              <Button asChild size="lg">
-                <Link href="/moving-load">Post your move</Link>
-              </Button>
-              <Button asChild size="lg" variant="text" className="text-on-secondary-container">
-                <a href={site.phone.href}>
-                  <Icon icon={callIcon} size={20} />
-                  {site.phone.display}
-                </a>
-              </Button>
-            </div>
-          </div>
-        </Container>
-      </section>
+      <NextTimeline
+        id="moving-next"
+        title="How booking a move works"
+        steps={movingTimeline}
+        lead="From search to delivery, this is what happens when you book through AllShip AI."
+      />
 
       <section aria-labelledby="moving-benefits" className="medium:py-24 py-16">
         <Container>
@@ -409,18 +364,70 @@ export default async function MovingPage() {
           />
         </Container>
       </section>
+      <PriceBreakdown
+        title="What your move costs, line by line"
+        lead="The mover sets the price, from their published rates or their bid. You pay it plus our service fee into escrow, and the mover keeps 100% of their price."
+      />
+
+      <section aria-labelledby="moving-gallery" className="medium:py-24 py-16">
+        <Container>
+          <SectionHeader
+            id="moving-gallery"
+            title="Our highest standard in residential moving"
+            description="Wrapped furniture, strapped loads and labeled boxes: what a careful move looks like from the inside of the truck."
+          />
+          <div className="mt-10">
+            <MovingGallery items={movingGallery} />
+          </div>
+        </Container>
+      </section>
+
+      {moreQuotes.length > 0 && (
+        <section aria-labelledby="moving-reviews" className="bg-surface-container-low medium:py-24 py-16">
+          <Container>
+            <SectionHeader id="moving-reviews" title="Featured reviews from our customers" />
+            <ul className="medium:grid-cols-2 large:grid-cols-3 mt-10 grid gap-x-10 gap-y-12">
+              {moreQuotes.map((t) => (
+                <li key={t.id} className="border-outline-variant border-t pt-6">
+                  <TestimonialQuote t={t} />
+                </li>
+              ))}
+            </ul>
+          </Container>
+        </section>
+      )}
+
       <section
         aria-labelledby="moving-advantages"
-        className="bg-inverse-surface text-inverse-on-surface medium:py-20 py-14"
+        className="bg-inverse-surface text-inverse-on-surface medium:py-24 py-16"
       >
         <Container>
-          <h2
-            id="moving-advantages"
-            className="text-headline-md medium:text-headline-lg max-w-[820px] font-normal text-balance"
-          >
-            The AllShip AI advantage: stress-free moving services
-          </h2>
-          <ul className="medium:grid-cols-2 large:grid-cols-4 mt-10 grid gap-x-8 gap-y-5">
+          <div className="large:grid-cols-[minmax(0,1fr)_auto] large:items-end grid gap-8">
+            <div>
+              <h2
+                id="moving-advantages"
+                className="text-headline-md medium:text-display-sm max-w-[820px] font-normal text-balance"
+              >
+                Ready to see what your move costs?
+              </h2>
+              <p className="text-body-lg text-inverse-on-surface/80 mt-3 max-w-[60ch] text-pretty">
+                It takes about a minute. Free, no sign-up to see prices, and nothing is charged until you accept
+                a mover.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button asChild size="lg">
+                <a href="#moving-quote">Get my moving prices</a>
+              </Button>
+              <Button asChild size="lg" variant="text" className="text-inverse-on-surface">
+                <a href={site.phone.href}>
+                  <Icon icon={callIcon} size={20} />
+                  {site.phone.display}
+                </a>
+              </Button>
+            </div>
+          </div>
+          <ul className="medium:grid-cols-2 large:grid-cols-4 mt-12 grid gap-x-8 gap-y-5">
             {movingAdvantages.map((a) => (
               <li
                 key={a}
@@ -433,51 +440,6 @@ export default async function MovingPage() {
           </ul>
         </Container>
       </section>
-
-      <section aria-labelledby="moving-ai" className="medium:py-24 py-16">
-        <Container>
-          <div className="large:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] large:gap-16 grid gap-6">
-            <div>
-              <p className="text-title-sm text-primary font-medium">AI-powered, easy-to-use platform</p>
-              <h2
-                id="moving-ai"
-                className="text-headline-lg text-on-surface medium:text-display-sm mt-3 font-normal text-balance"
-              >
-                Ask about your move in plain words
-              </h2>
-            </div>
-            <div className="large:pt-10 flex flex-col gap-6">
-              <p className="text-body-xl text-on-surface-variant text-pretty">
-                The AllShip AI assistant helps you describe the move, compares movers and explains each price
-                line. It never books or pays for you; you confirm every step.
-              </p>
-              <ul className="border-outline-variant medium:grid-cols-3 grid gap-4 border-t pt-6">
-                {[
-                  "Describe the move, get a draft",
-                  "Compare movers side by side",
-                  "Updates at pickup and delivery",
-                ].map((t) => (
-                  <li key={t} className="text-body-lg text-on-surface flex gap-3">
-                    <Icon icon={checkIcon} size={22} className="text-primary mt-0.5 shrink-0" />
-                    {t}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </Container>
-      </section>
-
-      <PriceBreakdown
-        title="What your move costs, line by line"
-        lead="The mover sets the price, from their published rates or their bid. You pay it plus our service fee into escrow, and the mover keeps 100% of their price."
-      />
-
-      <NextTimeline
-        id="moving-next"
-        steps={movingTimeline}
-        lead="Booking an instant price works like this. If you post your move for bids instead, movers bid first and you pick one."
-      />
 
       <FAQSection id="moving-faq" items={movingFaq} tone="low" />
     </>

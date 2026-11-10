@@ -193,8 +193,9 @@ export type InstantQuoteRecord = {
   bidId?: string;
 };
 
-export function buildMoveLoad(req: MoveRequestData, route: ResolvedRoute, quote: InstantQuoteRecord) {
+export function buildMoveLoad(req: MoveRequestData, route: ResolvedRoute, quote: InstantQuoteRecord | null) {
   const category = moveCategory(route.miles);
+  const volumeCuFt = quote?.volumeCuFt ?? volumeForBedrooms(req.bedrooms);
   const services: string[] = [];
   if (req.packing !== "none" || req.unpacking) services.push("Packing and unpacking");
   if (req.storage) services.push("Storage");
@@ -208,15 +209,15 @@ export function buildMoveLoad(req: MoveRequestData, route: ResolvedRoute, quote:
     if (req.storage && req.storageMonths > 0) details.storageMonths = req.storageMonths;
   }
   const extras = [
-    `${quote.volumeCuFt.toLocaleString("en-US")} ft³ estimated from ${req.bedrooms} ${req.bedrooms === 1 ? "bedroom" : "bedrooms"}.`,
+    `${volumeCuFt.toLocaleString("en-US")} ft³ estimated from ${req.bedrooms} ${req.bedrooms === 1 ? "bedroom" : "bedrooms"}.`,
     req.packing !== "none" ? `${packingLevels[req.packing as PackingLevel].label}.` : null,
     req.unpacking ? "Unpacking at the new home." : null,
     req.storage ? `Storage for ${req.storageMonths} ${req.storageMonths === 1 ? "month" : "months"}.` : null,
     ...requirementsOf(req).map((r) => `${r}.`),
-    `Booked from ${quote.carrierName}'s instant quote at ${formatUsd(quote.carrierCents)}. Other carriers can still bid.`,
+    quote ? `Booked from ${quote.carrierName}'s instant quote at ${formatUsd(quote.carrierCents)}. Other carriers can still bid.` : "Posted from the moving page for bids from verified movers.",
   ].filter(Boolean);
   details.notes = extras.join("\n");
-  details.instantQuote = quote;
+  if (quote) details.instantQuote = quote;
   details.moveRequest = {
     moveType: req.moveType,
     bedrooms: req.bedrooms,
@@ -234,7 +235,7 @@ export function buildMoveLoad(req: MoveRequestData, route: ResolvedRoute, quote:
     pickup: stopOf(route.origin, req.pickupDate),
     dropoff: stopOf(route.destination, req.deliveryDate || req.pickupDate),
     distanceMiles: route.miles,
-    estimatedVolumeCuFt: quote.volumeCuFt,
+    estimatedVolumeCuFt: volumeCuFt,
     details,
     detailsVersion: LOAD_DETAILS_VERSION,
     categoryName: categories.find((c) => c.key === category)?.name ?? "Moving",
@@ -274,7 +275,7 @@ export async function insertMoveLoad(tx: Tx, shipperId: string, built: ReturnTyp
     })
     .returning({ id: load.id, publicId: load.publicId, status: load.status });
   if (!row) throw new Error("Insert failed");
-  await tx.insert(loadEvent).values({ loadId: row.id, type: opts.publish ? "published" : "created", toStatus: row.status, actorId: shipperId, payload: { source: "instant_quote" } });
+  await tx.insert(loadEvent).values({ loadId: row.id, type: opts.publish ? "published" : "created", toStatus: row.status, actorId: shipperId, payload: { source: built.details.instantQuote ? "instant_quote" : "moving_bid_request" } });
   return row;
 }
 

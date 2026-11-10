@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { moveCategory, priceMove, rankMatches, selectTier, tierGaps, validateTiers, volumeForBedrooms, type RateTier } from "@/features/moving/pricing";
 import { moveRequestSchema } from "@/features/moving/schema";
+import { allCityData } from "@/server/matcher/city-data.generated";
 import { cityData, zip3Data } from "@/server/matcher/geo-data";
 import { haversineMiles, lookupPlace, roadMiles, suggestPlaces } from "@/server/matcher/places";
 
@@ -177,5 +178,18 @@ describe("rankMatches", () => {
     const out = rankMatches([m("A", 100, 4.2, 10), m("B", 200, 4.8, 5)]);
     expect(out[1]!.labels).toEqual(["top_rated"]);
     expect(rankMatches([m("A", 100, 4.8, 5), m("B", 200, 4.8, 5)]).flatMap((x) => x.labels)).toEqual(["lowest_price"]);
+  });
+});
+
+describe("full city index", () => {
+  const full = { zip3Data, cityData: allCityData };
+
+  it("keeps major cities first and adds every town from the ZIP data", () => {
+    expect(suggestPlaces("mia", full)[0]).toBe("Miami, FL");
+    expect(suggestPlaces("boca", full)).toContain("Boca Raton, FL");
+  });
+
+  it("resolves small towns that the major-city list misses", () => {
+    expect(lookupPlace("Boca Grande, FL", full)).toMatchObject({ city: "Boca Grande", state: "FL", precision: "city" });
   });
 });

@@ -1,13 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { formatUsd } from "@/lib/money";
 import type { Match, MatchRoute } from "@/server/matcher/service";
 import type { BookingIcons } from "./booking";
+import type { MoveRequestData } from "./schema";
 
-type Results = { route: MatchRoute; volumeCuFt: number; matches: Match[]; requirements: string[] };
+type Results = { route: MatchRoute; volumeCuFt: number; matches: Match[]; requirements: string[]; request: MoveRequestData };
 
 const labelText = { lowest_price: "Lowest price", top_rated: "Top rated" } as const;
 
@@ -111,65 +111,62 @@ function MatchRow({ match, icons, feePercent, onChoose, first }: { match: Match;
   );
 }
 
-export function MatchList({ results, icons, feePercent, onChoose, onEdit }: { results: Results; icons: BookingIcons; feePercent: number; onChoose: (m: Match) => void; onEdit: () => void }) {
-  const { route, matches, volumeCuFt, requirements } = results;
-  const miles = Math.round(route.miles).toLocaleString("en-US");
-  return (
-    <section aria-labelledby="results-heading" className="mt-6 rounded-xl bg-surface-container-lowest p-5 text-on-surface shadow-elevation-1 medium:p-8">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-outline-variant pb-5">
-        <div className="min-w-0">
-          <h2 id="results-heading" className="text-headline-sm text-on-surface">
-            {matches.length === 0 ? "No instant prices for this move yet" : matches.length === 1 ? "1 mover can price your move now" : `${matches.length} movers can price your move now`}
+export function MatchList({ results, icons, feePercent, onChoose, onRequestBids }: { results: Results; icons: BookingIcons; feePercent: number; onChoose: (m: Match) => void; onRequestBids: () => void }) {
+  const { matches, requirements } = results;
+
+  if (matches.length === 0) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div>
+          <h2 id="results-heading" tabIndex={-1} className="text-headline-sm text-on-surface outline-none">
+            Movers will send you prices for this move
           </h2>
-          <p className="mt-2 text-body-lg text-on-surface-variant">
-            {route.from} <span aria-hidden="true">→</span>
-            <span className="sr-only">to</span> {route.to}
-          </p>
-          <p className="mt-1 text-body-md text-on-surface-variant">
-            {route.method === "estimated" ? `About ${miles} miles, estimated from map centroids` : `${miles} road miles`} · {volumeCuFt.toLocaleString("en-US")} ft³ ·{" "}
-            {route.category === "local_moving" ? "local move" : "long-distance move"}
-          </p>
+          <p className="mt-2 max-w-[60ch] text-body-lg text-pretty text-on-surface-variant">No mover has published instant rates for this route yet. Tell us where to reach you and verified movers who serve it send their bids, usually within a few hours.</p>
         </div>
-        <Button variant="text" onClick={onEdit}>
-          Edit search
+        <ol className="grid gap-4 medium:grid-cols-3">
+          {[
+            ["Leave your contact", "Your move details are already filled in."],
+            ["Movers send bids", "Each bid shows the price, dates and FMCSA status."],
+            ["Pick one, pay into escrow", `The total includes our ${feePercent}% fee. The mover is paid after delivery.`],
+          ].map(([t, b], i) => (
+            <li key={t} className="flex gap-3">
+              <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary-container text-label-lg text-on-primary-container">
+                {i + 1}
+              </span>
+              <span>
+                <span className="block text-title-sm text-on-surface">{t}</span>
+                <span className="block text-body-md text-pretty text-on-surface-variant">{b}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+        <Button size="lg" onClick={onRequestBids} className="h-14 w-full">
+          Get prices from movers
         </Button>
       </div>
+    );
+  }
 
+  return (
+    <div className="flex flex-col">
+      <h2 id="results-heading" tabIndex={-1} className="text-headline-sm text-on-surface outline-none">
+        {matches.length === 1 ? "1 mover can take your move" : `${matches.length} movers can take your move`}
+      </h2>
+      <p className="mt-1 text-body-md text-on-surface-variant">Sorted by total price, with our {feePercent}% fee included. Nothing is charged now.</p>
       {requirements.length > 0 && (
-        <p className="mt-5 flex gap-2 rounded-md bg-surface-container-low p-4 text-body-md text-on-surface-variant">
+        <p className="mt-4 flex gap-2 rounded-md bg-surface-container-low p-4 text-body-md text-on-surface-variant">
           <span className="mt-px shrink-0">{icons.info}</span>
-          <span>
-            {requirements.join(", ")}. These go to the mover as requirements with your booking. They aren&rsquo;t in the price, so confirm any extra cost with the mover before you pay.
-          </span>
+          <span>{requirements.join(", ")}. These go to the mover with your booking and aren&rsquo;t in the price.</span>
         </p>
       )}
-
-      {matches.length > 0 ? (
-        <>
-          <ul className="mt-2">
-            {matches.map((m, i) => (
-              <MatchRow key={m.carrierOrgId} match={m} icons={icons} feePercent={feePercent} first={i === 0} onChoose={() => onChoose(m)} />
-            ))}
-          </ul>
-          <p className="mt-4 text-body-sm text-pretty text-on-surface-variant">
-            Sorted by total price. Each price is the mover&rsquo;s own rate per cubic foot for this distance, plus the services you picked and our {feePercent}% fee. Your payment is held in escrow and the mover is paid after delivery.
-          </p>
-        </>
-      ) : (
-        <div className="mt-6 flex flex-col gap-4">
-          <p className="max-w-[60ch] text-body-lg text-pretty text-on-surface-variant">
-            None of the movers who publish instant rates cover this distance and these services yet. Post your move instead: verified movers send bids, usually within a few hours, and you choose.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <Button asChild>
-              <Link href="/moving-load">Post your move for bids</Link>
-            </Button>
-            <Button variant="text" onClick={onEdit}>
-              Change the search
-            </Button>
-          </div>
-        </div>
-      )}
-    </section>
+      <ul className="mt-2">
+        {matches.map((m, i) => (
+          <MatchRow key={m.carrierOrgId} match={m} icons={icons} feePercent={feePercent} first={i === 0} onChoose={() => onChoose(m)} />
+        ))}
+      </ul>
+      <button type="button" onClick={onRequestBids} className="mt-2 w-fit cursor-pointer text-label-lg font-medium text-primary">
+        None of these? Get bids from more movers
+      </button>
+    </div>
   );
 }

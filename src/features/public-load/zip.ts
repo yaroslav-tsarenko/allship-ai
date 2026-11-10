@@ -26,6 +26,21 @@ export async function findZip(zip: string): Promise<ZipPlace | null | undefined>
   return row ? { city: row[0], state: row[1], lat: row[2], lng: row[3] } : null;
 }
 
+export async function suggestZips(query: string, limit = 6): Promise<Array<ZipPlace & { zip: string }>> {
+  const q = query.trim();
+  if (!/^\d{3,5}$/.test(q)) return [];
+  const table = await prefixFile(q.slice(0, 3));
+  if (!table) return [];
+  return Object.keys(table)
+    .filter((z) => z.startsWith(q))
+    .sort()
+    .slice(0, limit)
+    .map((zip) => {
+      const [city, state, lat, lng] = table[zip]!;
+      return { zip, city, state, lat, lng };
+    });
+}
+
 export async function lookupZip(zip: string): Promise<ZipPlace | null> {
   return (await findZip(zip)) ?? null;
 }

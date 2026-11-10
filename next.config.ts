@@ -73,6 +73,7 @@ const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   reactStrictMode: true,
   poweredByHeader: false,
+  outputFileTracingIncludes: { "/moving": ["./public/data/zip/*.json"] },
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [

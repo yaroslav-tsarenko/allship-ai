@@ -108,6 +108,10 @@ export const movingFaq = [
       "We create your account and email you a confirmation link. When you confirm, your move is posted and the mover you chose places a bid at the quoted price. Other verified movers can also bid. You accept the bid you want and pay; the money stays in escrow until delivery. The mover can withdraw within 24 hours if they can't take the move.",
   },
   {
+    question: "What if no instant price shows for my route?",
+    answer: "Leave your name, email and phone under the search results. We create your account and, once you confirm your email, post the move with the details you already entered. Verified movers who serve your route send bids, usually within a few hours, and you choose. It's free until you accept a bid.",
+  },
+  {
     question: "Can I schedule pickup and delivery?",
     answer: "Yes. Choose a pickup date and, if you need one, a delivery date. The mover confirms timing, access and your inventory with you before pickup.",
   },

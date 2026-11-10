@@ -2,7 +2,7 @@
 
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { bookingSchema, moveRequestSchema } from "@/features/moving/schema";
+import { bidRequestSchema, bookingSchema, moveRequestSchema } from "@/features/moving/schema";
 import { tierGaps, validateTiers, volumeForBedrooms } from "@/features/moving/pricing";
 import { rateCardSchema } from "@/features/pricing/schema";
 import { getActor } from "@/server/actor";
@@ -67,7 +67,33 @@ export const bookInstantQuoteAction = actionClient.inputSchema(bookingSchema).ac
   }
 
   const started = await startMovingFunnel({ contact: input.contact, marketingOptIn: input.marketingOptIn, built });
-  return { status: "check_email" as const, email: started.email };
+  return started.kind === "new" ? { status: "redirect" as const, href: started.url } : { status: "sign_in" as const, href: started.href };
+});
+
+export const requestMoveBidsAction = actionClient.inputSchema(bidRequestSchema).action(async ({ parsedInput: input }) => {
+  const ip = await clientIp();
+  if (!(await consumeRateLimit(`matcher-bids:${ip}`, 6, 3600))) throw new ActionError("Too many requests from this connection. Try again in an hour or call us.");
+  if (!(await verifyTurnstile(input.turnstileToken, ip))) throw new ActionError("Please complete the security check.");
+
+  const route = await resolveRoute(input.request.from, input.request.to);
+  if ("error" in route) throw new ActionError("We couldn't find one of the addresses. Search again.");
+  const built = buildMoveLoad(input.request, route, null);
+
+  const session = await getSession();
+  if (session) {
+    const actor = await getActor(session.user.id);
+    if (actor.accountType !== "shipper") throw new ActionError("You're signed in with a carrier account. Sign in as a shipper to post a move.");
+    if (session.user.email.toLowerCase() !== input.contact.email.toLowerCase()) {
+      throw new ActionError(`You're signed in as ${session.user.email}. Use that email or sign out first.`);
+    }
+    const row = await db.transaction((tx) => insertMoveLoad(tx, actor.userId, built, { publish: true, publishOnVerify: false }));
+    await enrollFollowup(actor.email, actor.userId, row.id, row.publicId);
+    revalidatePath("/app/loads");
+    return { status: "booked" as const, href: `/app/loads/${row.publicId}` };
+  }
+
+  const started = await startMovingFunnel({ contact: input.contact, marketingOptIn: input.marketingOptIn, built });
+  return started.kind === "new" ? { status: "redirect" as const, href: started.url } : { status: "sign_in" as const, href: started.href };
 });
 
 const withCarrier = authedAction.use(async ({ next, ctx }) => {

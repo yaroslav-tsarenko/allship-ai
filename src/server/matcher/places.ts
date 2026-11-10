@@ -19,7 +19,7 @@ const stateNames: Record<string, string> = {
 };
 const stateCodes = new Set(Object.values(stateNames));
 
-const norm = (s: string) =>
+export const norm = (s: string) =>
   s
     .toLowerCase()
     .normalize("NFKD")

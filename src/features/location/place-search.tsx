@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { publicEnv } from "@/lib/public-env";
 import { loadPlaces, onPlacesFailure, placesFailed, resolve, suggest, type Suggestion } from "./google-places";
+import { suggestZips } from "@/features/public-load/zip";
 import { searchLocalPlaces, type LocalPlace } from "./local-places";
 
 export const mapsKey = publicEnv.NEXT_PUBLIC_GOOGLE_MAPS_KEY;
@@ -63,15 +64,18 @@ export function useLocalSuggestions(query: string, enabled: boolean) {
   useEffect(() => {
     const q = query.trim();
     let cancelled = false;
-    if (!enabled || q.length < 2 || /^\d{1,4}$/.test(q)) {
+    const digits = /^\d+$/.test(q);
+    if (!enabled || q.length < 2 || (digits && q.length < 3)) {
       const id = window.setTimeout(() => setState({ items: [], loading: false }), 0);
       return () => window.clearTimeout(id);
     }
     const id = window.setTimeout(async () => {
       setState((s) => ({ ...s, loading: true }));
-      const items = await searchLocalPlaces(q);
+      const items = digits
+        ? (await suggestZips(q)).map((z) => ({ label: `${z.city}, ${z.state} ${z.zip}`, city: z.city, state: z.state, postalCode: z.zip }))
+        : await searchLocalPlaces(q);
       if (!cancelled) setState({ items: items.filter((p) => p.label.toLowerCase() !== q.toLowerCase()), loading: false });
-    }, 160);
+    }, digits ? 60 : 140);
     return () => {
       cancelled = true;
       window.clearTimeout(id);

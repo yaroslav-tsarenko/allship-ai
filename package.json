@@ -24,6 +24,7 @@
     "tokens": "tsx scripts/generate-tokens.ts",
     "icons": "tsx scripts/generate-icons.ts",
     "geo:zip-index": "tsx scripts/generate-zip-index.ts",
+    "geo:city-index": "tsx scripts/generate-city-index.ts",
     "email:dev": "email dev --dir src/emails",
     "content:seed": "tsx scripts/seed-blog.ts",
     "demo:seed": "tsx scripts/seed-demo.ts",

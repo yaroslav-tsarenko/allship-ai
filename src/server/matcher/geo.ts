@@ -1,7 +1,10 @@
 import "server-only";
 import { env } from "@/env";
 import { log } from "@/lib/log";
-import { cityData, zip3Data } from "./geo-data";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { allCityData } from "./city-data.generated";
+import { zip3Data } from "./geo-data";
 import { lookupPlace, roadMiles, type Place } from "./places";
 
 export type { Place } from "./places";
@@ -58,8 +61,34 @@ async function googleRouteMiles(a: Place, b: Place): Promise<number | null> {
   }
 }
 
+const geoData = { zip3Data, cityData: allCityData };
+const zipTables = new Map<string, Promise<Record<string, [string, string, number, number]> | null>>();
+
+function zipTable(prefix: string) {
+  let pending = zipTables.get(prefix);
+  if (!pending) {
+    pending = readFile(join(process.cwd(), "public/data/zip", `${prefix}.json`), "utf8")
+      .then((raw) => JSON.parse(raw) as Record<string, [string, string, number, number]>)
+      .catch(() => null);
+    zipTables.set(prefix, pending);
+  }
+  return pending;
+}
+
+export async function exactZip(zip: string): Promise<Place | null> {
+  if (!/^\d{5}$/.test(zip)) return null;
+  const row = (await zipTable(zip.slice(0, 3)))?.[zip];
+  if (!row) return null;
+  const [city, state, lat, lng] = row;
+  return { label: `${city}, ${state} ${zip}`, city, state, postalCode: zip, lat, lng, precision: "zip" };
+}
+
 export async function resolvePlace(query: string): Promise<Place | null> {
-  return (await googleGeocode(query)) ?? lookupPlace(query, { zip3Data, cityData });
+  const google = await googleGeocode(query);
+  if (google) return google;
+  const zip = query.match(/\b(\d{5})(?:-\d{4})?\b/)?.[1];
+  if (zip) return (await exactZip(zip)) ?? lookupPlace(query, geoData);
+  return lookupPlace(query, geoData);
 }
 
 export async function resolveRoute(from: string, to: string): Promise<ResolvedRoute | { error: "origin" | "destination" }> {
