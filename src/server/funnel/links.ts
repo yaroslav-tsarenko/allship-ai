@@ -10,7 +10,7 @@ const STASH_PREFIX = "public-load-stash:";
 
 const appUrl = () => env.BETTER_AUTH_URL ?? env.NEXT_PUBLIC_APP_URL;
 
-export async function createPublishLink(email: string, hours = PUBLISH_LINK_HOURS) {
+export async function createMagicToken(email: string, hours = PUBLISH_LINK_HOURS) {
   const ctx = await auth.$context;
   const token = generateRandomString(32, "a-z", "A-Z");
   await ctx.internalAdapter.createVerificationValue({
@@ -18,6 +18,11 @@ export async function createPublishLink(email: string, hours = PUBLISH_LINK_HOUR
     value: JSON.stringify({ type: "magic-link", email: email.trim().toLowerCase() }),
     expiresAt: new Date(Date.now() + hours * 3_600_000),
   });
+  return token;
+}
+
+export async function createPublishLink(email: string, hours = PUBLISH_LINK_HOURS) {
+  const token = await createMagicToken(email, hours);
   const url = new URL("/api/auth/magic-link/verify", appUrl());
   url.searchParams.set("token", token);
   url.searchParams.set("callbackURL", CLAIM_PATH);

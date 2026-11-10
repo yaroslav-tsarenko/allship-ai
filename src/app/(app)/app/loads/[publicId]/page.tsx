@@ -383,6 +383,9 @@ export default async function LoadDetailPage({ params, searchParams }: Props) {
                 )}
               </dl>
               <p className="mt-4 rounded-sm bg-surface-container-low px-3 py-2 text-body-md text-on-surface-variant">{paymentNote(l.status, paid, post.payout, carrierName)}</p>
+              <Button asChild variant="text" className="mt-2 -ml-3">
+                <Link href={`/app/loads/${l.publicId}/invoice`}>View invoice</Link>
+              </Button>
             </Card>
           )}
 

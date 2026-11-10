@@ -71,8 +71,8 @@ async function loadCandidates(route: { originState: string; destinationState: st
     sql`(cardinality(${carrierProfile.serviceStates}) = 0 or ${carrierProfile.serviceStates} && array[${route.originState}, ${route.destinationState}]::text[])`,
     sql`exists (select 1 from ${member} where ${member.organizationId} = ${carrierProfile.orgId} and ${member.role} = 'owner')`,
   ];
-  if (!allowUnverified()) where.push(eq(carrierProfile.fmcsaStatus, "verified"));
-  if (getStripe()) where.push(eq(carrierProfile.payoutsEnabled, true));
+  if (!allowUnverified()) where.push(inArray(carrierProfile.fmcsaStatus, ["verified", "manual_review"]));
+  if (getStripe()) where.push(sql`(${carrierProfile.payoutsEnabled} or ${carrierProfile.fmcsaStatus} = 'manual_review')`);
   if (onlyOrgId) where.push(eq(carrierProfile.orgId, onlyOrgId));
   const rows: Candidate[] = await db
     .select({

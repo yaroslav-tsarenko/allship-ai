@@ -2,12 +2,17 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { render } from "react-email";
 import type { ReactElement } from "react";
+import nodemailer from "nodemailer";
 import { Resend } from "resend";
 import { env } from "@/env";
 import { db } from "@/server/db/client";
 import { emailSuppression } from "@/server/db/schema";
 
 const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
+const smtp =
+  env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS
+    ? nodemailer.createTransport({ host: env.SMTP_HOST, port: env.SMTP_PORT, secure: env.SMTP_PORT === 465, requireTLS: env.SMTP_PORT === 587, auth: { user: env.SMTP_USER, pass: env.SMTP_PASS } })
+    : null;
 
 export type EmailCategory = "transactional" | "lifecycle" | "marketing";
 export type SendResult = { status: "sent" | "logged" | "suppressed"; id?: string };
@@ -36,8 +41,13 @@ export async function sendEmail({ to, subject, react, tag, category = "transacti
   const [html, text] = await Promise.all([render(react), render(react, { plainText: true })]);
   const headers: Record<string, string> = unsubscribeUrl ? { "List-Unsubscribe": `<${unsubscribeUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } : {};
 
+  if (smtp) {
+    const info = await smtp.sendMail({ from: env.EMAIL_FROM, to, subject, html, text, replyTo, headers: { ...headers, "X-Entity-Ref-ID": tagValue(tag) } });
+    return { status: "sent", id: info.messageId };
+  }
+
   if (!resend) {
-    if (env.NODE_ENV === "production") throw new Error("RESEND_API_KEY is not configured");
+    if (env.NODE_ENV === "production") throw new Error("No email transport is configured: set SMTP_HOST, SMTP_USER and SMTP_PASS, or RESEND_API_KEY");
     const headerLines = Object.entries(headers).map(([k, v]) => `${k}: ${v}`).join("\n");
     console.info(`[email:${tag}] to=${to} category=${category} subject="${subject}"${headerLines ? `\n${headerLines}` : ""}\n${text}`);
     return { status: "logged" };

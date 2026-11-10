@@ -24,7 +24,7 @@ export const movingBenefits: MovingBenefit[] = [
   },
   {
     title: "Trusted and licensed carriers",
-    description: "Move with confidence. Movers are checked against FMCSA records before they can quote or bid on AllShip.",
+    description: "Move with confidence. Every mover shows its FMCSA authority status, and only verified movers can bid on posted moves.",
     more: "We check each mover's USDOT and MC numbers, insurance and payout account. Interstate household goods movers must be registered with FMCSA.",
     icon: verifiedUserIcon,
   },
@@ -75,7 +75,7 @@ export const movingBenefits: MovingBenefit[] = [
 export const movingAdvantages = [
   "Prices for your home size",
   "Real-time move tracking",
-  "FMCSA-checked movers",
+  "FMCSA status on every mover",
   "Flexible pickup and delivery dates",
   "Itemized, upfront pricing",
   "Payment held in escrow until delivery",
@@ -91,7 +91,7 @@ export const movingGallery = [movingGallery1, movingGallery2, movingGallery3, mo
 export const movingFaq = [
   {
     question: "What is AllShip AI?",
-    answer: `AllShip AI is an online marketplace for moving and shipping. You describe your move, FMCSA-checked movers price it from their published rates or bid on it, and your payment is held in escrow until delivery. You pay the mover's price plus a ${site.platformFeePercent}% service fee.`,
+    answer: `AllShip AI is an online marketplace for moving and shipping. You describe your move, movers price it from their published rates or bid on it, and your payment is held in escrow until delivery. You pay the mover's price plus a ${site.platformFeePercent}% service fee.`,
   },
   {
     question: "How are the instant prices calculated?",

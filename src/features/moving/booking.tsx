@@ -11,10 +11,13 @@ import { SegmentedButton } from "@/components/ui/segmented-button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextField } from "@/components/ui/text-field";
 import { Turnstile } from "@/features/auth/turnstile";
+import { GoogleButton } from "@/features/auth/google-button";
 import { AreaField } from "@/features/location/area-field";
 import { cn } from "@/lib/cn";
 import { formatUsd } from "@/lib/money";
-import { bookInstantQuoteAction, findMatchesAction, requestMoveBidsAction } from "@/server/actions/matcher";
+import { bookInstantQuoteAction, findMatchesAction, requestMoveBidsAction, stashMoveForGoogleAction } from "@/server/actions/matcher";
+import { authClient } from "@/server/auth/client";
+import { MOVING_CLAIM_PATH } from "@/server/matcher/claim";
 import type { Match, MatchRoute } from "@/server/matcher/service";
 import { Breakdown, MatchList } from "./match-list";
 import { bedroomVolumes } from "./pricing";
@@ -86,7 +89,7 @@ function readSaved(): MoveRequestInput | null {
   }
 }
 
-export function MovingBooking({ icons, feePercent }: { icons: BookingIcons; feePercent: number }) {
+export function MovingBooking({ icons, feePercent, googleEnabled = false }: { icons: BookingIcons; feePercent: number; googleEnabled?: boolean }) {
   const form = useForm<MoveRequestInput, unknown, MoveRequestData>({ resolver: zodResolver(moveRequestSchema), defaultValues: defaults, mode: "onTouched" });
   const { register, control, handleSubmit, setValue, setError, getValues, formState, reset, trigger } = form;
   const errors = formState.errors;
@@ -94,6 +97,10 @@ export function MovingBooking({ icons, feePercent }: { icons: BookingIcons; feeP
   const search = useAction(findMatchesAction);
   const book = useAction(bookInstantQuoteAction);
   const bids = useAction(requestMoveBidsAction);
+  const stash = useAction(stashMoveForGoogleAction);
+  const sessionState = authClient.useSession();
+  const me = sessionState.data?.user as { name: string; email: string; phone?: string | null; accountType?: string | null } | undefined;
+  const [banner, setBanner] = useState<string | null>(null);
   const [step, setStep] = useState<Step>("route");
   const [results, setResults] = useState<Results | null>(null);
   const [chosen, setChosen] = useState<Match | null>(null);
@@ -124,6 +131,9 @@ export function MovingBooking({ icons, feePercent }: { icons: BookingIcons; feeP
       if (saved) reset(saved);
       if (from) setValue("from", from, { shouldDirty: true });
       if (to) setValue("to", to, { shouldDirty: true });
+      const reason = params.get("notice");
+      if (reason === "carrier-account") setBanner("That Google account is a carrier account. Book with a customer account or your email.");
+      if (reason === "claim-failed") setBanner("We couldn't finish that booking. Search again and we'll get it done.");
     }, 0);
     return () => window.clearTimeout(id);
   }, [reset, setValue]);
@@ -167,6 +177,11 @@ export function MovingBooking({ icons, feePercent }: { icons: BookingIcons; feeP
     go("results");
   });
 
+  useEffect(() => {
+    if (step !== "contact" || !me || me.accountType === "carrier") return;
+    contact.reset({ name: me.name || me.email, email: me.email, phone: me.phone ?? contact.getValues("phone") });
+  }, [step, me, contact]);
+
   const onContact = contact.handleSubmit(async (person) => {
     if (!results) return;
     setNotice(null);
@@ -201,7 +216,7 @@ export function MovingBooking({ icons, feePercent }: { icons: BookingIcons; feeP
   };
 
   const submitting = book.isPending || bids.isPending || leaving;
-  const contactError = book.result.serverError ?? bids.result.serverError ?? "";
+  const contactError = book.result.serverError ?? bids.result.serverError ?? stash.result.serverError ?? "";
   const ce = contact.formState.errors;
   const bedrooms = Number(all.bedrooms ?? 2);
 
@@ -226,6 +241,8 @@ export function MovingBooking({ icons, feePercent }: { icons: BookingIcons; feeP
           </div>
         </div>
       </div>
+
+      {banner && <p className="mb-6 rounded-md bg-warning-container p-3 text-body-md text-on-warning-container">{banner}</p>}
 
       {step === "route" && (
         <form
@@ -263,7 +280,7 @@ export function MovingBooking({ icons, feePercent }: { icons: BookingIcons; feeP
             Continue
           </Button>
           <ul className="flex flex-wrap gap-x-6 gap-y-2 text-body-md text-on-surface-variant" aria-label="What you get">
-            {["Free, no sign-up to see prices", "FMCSA-checked movers", "Paid from escrow after delivery"].map((t) => (
+            {["Free, no sign-up to see prices", "FMCSA status on every mover", "Paid from escrow after delivery"].map((t) => (
               <li key={t} className="inline-flex items-center gap-2">
                 <span className="text-primary">{icons.check}</span>
                 {t}
@@ -404,21 +421,77 @@ export function MovingBooking({ icons, feePercent }: { icons: BookingIcons; feeP
               </div>
             </details>
           )}
-          <div className="grid gap-4">
-            <TextField label="Full name" autoComplete="name" error={ce.name?.message} required {...contact.register("name")} />
-            <div className="grid gap-4 medium:grid-cols-2">
-              <TextField label="Email" type="email" autoComplete="email" inputMode="email" error={ce.email?.message} required {...contact.register("email")} />
-              <TextField label="Phone" type="tel" autoComplete="tel" inputMode="tel" error={ce.phone?.message} supportingText="The mover calls to confirm details" required {...contact.register("phone")} />
+          {me && me.accountType === "carrier" ? (
+            <div className="flex flex-col gap-4 rounded-md bg-surface-container-low p-4">
+              <p className="text-body-lg text-pretty text-on-surface">You&rsquo;re signed in as {me.email}, a carrier account. Moves are booked from a customer account.</p>
+              <Button
+                type="button"
+                variant="tonal"
+                className="w-fit"
+                onClick={async () => {
+                  await authClient.signOut();
+                  contact.reset({ name: "", email: "", phone: "" });
+                }}
+              >
+                Sign out and continue
+              </Button>
             </div>
-          </div>
-          <Checkbox label="Send me moving tips and AllShip news. Unsubscribe anytime." checked={optIn} onCheckedChange={(v) => setOptIn(v === true)} />
-          <Turnstile onToken={onToken} resetKey={captchaReset} />
-          <Button type="submit" size="lg" loading={submitting} className="h-14 w-full">
-            {chosen ? `Book for ${formatUsd(chosen.shipperTotalCents)}` : "Get my prices"}
-          </Button>
-          <p className="text-body-sm text-pretty text-on-surface-variant">
-            This creates your free AllShip account. Nothing is charged until you accept a price, and your payment stays in escrow until delivery.
-          </p>
+          ) : me ? (
+            <>
+              <div className="flex items-center gap-4 rounded-md bg-surface-container-low p-4">
+                <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-title-sm text-on-primary">
+                  {(me.name || me.email).slice(0, 1).toUpperCase()}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-title-sm text-on-surface">{me.name || me.email}</span>
+                  <span className="block truncate text-body-md text-on-surface-variant">Booking with your account · {me.email}</span>
+                </span>
+              </div>
+              {!me.phone && <TextField label="Phone" type="tel" autoComplete="tel" inputMode="tel" error={ce.phone?.message} supportingText="The mover calls to confirm details" required {...contact.register("phone")} />}
+              <Turnstile onToken={onToken} resetKey={captchaReset} />
+              <Button type="submit" size="lg" loading={submitting} className="h-14 w-full">
+                {chosen ? `Book for ${formatUsd(chosen.shipperTotalCents)}` : "Post my move"}
+              </Button>
+            </>
+          ) : (
+            <>
+{googleEnabled && (
+                <>
+              <GoogleButton
+                callbackURL={MOVING_CLAIM_PATH}
+                newUserCallbackURL={MOVING_CLAIM_PATH}
+                errorCallbackURL="/moving"
+                disabled={submitting}
+                onBeforeRedirect={async () => {
+                  const phone = contact.getValues("phone").trim();
+                  const res = await stash.executeAsync({ request: results.request, carrierOrgId: chosen?.carrierOrgId, phone: /^\+?[0-9 ()-]{10,20}$/.test(phone) ? phone : "" });
+                  return Boolean(res?.data?.ok);
+                }}
+              />
+              <div className="flex items-center gap-4 text-body-md text-on-surface-variant" aria-hidden="true">
+                <span className="h-px flex-1 bg-outline-variant" />
+                or with your email
+                <span className="h-px flex-1 bg-outline-variant" />
+              </div>
+                </>
+              )}
+              <div className="grid gap-4">
+                <TextField label="Full name" autoComplete="name" error={ce.name?.message} required {...contact.register("name")} />
+                <div className="grid gap-4 medium:grid-cols-2">
+                  <TextField label="Email" type="email" autoComplete="email" inputMode="email" error={ce.email?.message} required {...contact.register("email")} />
+                  <TextField label="Phone" type="tel" autoComplete="tel" inputMode="tel" error={ce.phone?.message} supportingText="The mover calls to confirm details" required {...contact.register("phone")} />
+                </div>
+              </div>
+              <Checkbox label="Send me moving tips and AllShip news. Unsubscribe anytime." checked={optIn} onCheckedChange={(v) => setOptIn(v === true)} />
+              <Turnstile onToken={onToken} resetKey={captchaReset} />
+              <Button type="submit" size="lg" loading={submitting} className="h-14 w-full">
+                {chosen ? `Book for ${formatUsd(chosen.shipperTotalCents)}` : "Get my prices"}
+              </Button>
+              <p className="text-body-sm text-pretty text-on-surface-variant">
+                This creates your free AllShip account. Nothing is charged until you accept a price, and your payment stays in escrow until delivery.
+              </p>
+            </>
+          )}
           <p aria-live="polite" className="text-body-md text-error empty:hidden">
             {contactError}
           </p>
@@ -430,7 +503,7 @@ export function MovingBooking({ icons, feePercent }: { icons: BookingIcons; feeP
           <h2 data-step-focus tabIndex={-1} className="text-headline-sm text-on-surface outline-none">
             Welcome back. Sign in to finish
           </h2>
-          <p className="text-body-lg text-pretty text-on-surface-variant">You already have an AllShip account with this email. Your move is saved: sign in and it goes live right away.</p>
+          <p className="text-body-lg text-pretty text-on-surface-variant">You already have an AllShip account with this email. Your move is saved: sign in with your password, Google or a one-time code, and it goes live right away.</p>
           <Button asChild size="lg" className="h-14 w-full">
             <a href={signIn}>Sign in and post my move</a>
           </Button>

@@ -67,3 +67,9 @@ export const bidRequestSchema = z.object({
   marketingOptIn: z.boolean().default(false),
   turnstileToken: z.string().max(4096).optional(),
 });
+
+export const googleStashSchema = z.object({
+  request: moveRequestSchema,
+  carrierOrgId: z.string().min(1).max(100).optional(),
+  phone: z.string().trim().regex(/^\+?[0-9 ()-]{10,20}$/).or(z.literal("")).optional(),
+});

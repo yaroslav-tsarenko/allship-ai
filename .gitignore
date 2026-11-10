@@ -17,3 +17,4 @@ tools/mongo-export/node_modules
 .next-*
 _to_delete/
 .sync/
+.env*

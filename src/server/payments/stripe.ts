@@ -11,4 +11,4 @@ export function getStripe() {
 }
 
 export const paymentsConfigured = () => Boolean(env.STRIPE_SECRET_KEY);
-export const simulatedPayments = () => !env.STRIPE_SECRET_KEY && env.NODE_ENV !== "production";
+export const simulatedPayments = () => !env.STRIPE_SECRET_KEY && (env.NODE_ENV !== "production" || env.PAYMENTS_MODE === "simulated");

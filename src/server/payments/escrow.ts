@@ -11,6 +11,7 @@ import { bid, carrierProfile, conversation, ledgerEntry, load, loadEvent, organi
 import { transitionLoad } from "@/server/loads/service";
 import { notifyUsers, orgStaffIds } from "@/server/notifications/notify";
 import { notifyAdmins } from "@/server/notify/telegram";
+import { sendInvoice } from "./invoice";
 import { getStripe, simulatedPayments } from "./stripe";
 import { refreshCarrierActivation, safely, setEnrollmentStatus } from "@/server/nurture";
 
@@ -128,6 +129,7 @@ export async function markPaymentSucceeded(ref: { paymentIntentId?: string; paym
     return;
   }
   await safely("load booked", () => setEnrollmentStatus({ loadId: outcome.load.id, sequences: ["load_followup", "verify_publish"] }, "completed", "booked"));
+  await safely("invoice email", () => sendInvoice(outcome.load.publicId));
   const [org] = await db.select({ name: organization.name }).from(organization).where(eq(organization.id, outcome.bid.carrierOrgId)).limit(1);
   const carrierStaff = await orgStaffIds(outcome.bid.carrierOrgId);
   await Promise.allSettled([

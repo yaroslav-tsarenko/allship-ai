@@ -2,19 +2,39 @@
 
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { bidRequestSchema, bookingSchema, moveRequestSchema } from "@/features/moving/schema";
+import { cookies } from "next/headers";
+import { bidRequestSchema, bookingSchema, googleStashSchema, moveRequestSchema } from "@/features/moving/schema";
+import { stashValue } from "@/server/funnel/links";
+import { MOVING_CLAIM_PATH, MOVING_STASH_COOKIE } from "@/server/matcher/claim";
 import { tierGaps, validateTiers, volumeForBedrooms } from "@/features/moving/pricing";
 import { rateCardSchema } from "@/features/pricing/schema";
 import { getActor } from "@/server/actor";
 import { getSession } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { auditLog, carrierProfile, carrierRateTier, carrierServiceRates } from "@/server/db/schema";
-import { buildMoveLoad, createInstantBid, enrollFollowup, findMatches, insertMoveLoad, priceCandidates, type InstantQuoteRecord } from "@/server/matcher/service";
+import { buildMoveLoad, findMatches, priceCandidates, type InstantQuoteRecord } from "@/server/matcher/service";
 import { resolveRoute } from "@/server/matcher/geo";
 import { clientIp, consumeRateLimit } from "@/server/rate-limit";
 import { verifyTurnstile } from "@/server/turnstile";
-import { startMovingFunnel } from "@/server/matcher/funnel";
+import { publishForShipper, startMovingFunnel } from "@/server/matcher/funnel";
 import { actionClient, ActionError, authedAction } from "./safe-action";
+
+async function signedInShipper(email: string) {
+  const session = await getSession();
+  if (!session) return null;
+  const actor = await getActor(session.user.id);
+  if (actor.accountType !== "shipper" || actor.orgId) throw new ActionError("You're signed in with a carrier account. Sign out and book with a customer account.");
+  if (session.user.email.toLowerCase() !== email.trim().toLowerCase()) throw new ActionError(`You're signed in as ${session.user.email}. Use that email or sign out first.`);
+  return { id: actor.userId, email: session.user.email, phone: (session.user as { phone?: string | null }).phone ?? null };
+}
+
+export const stashMoveForGoogleAction = actionClient.inputSchema(googleStashSchema).action(async ({ parsedInput: input }) => {
+  const ip = await clientIp();
+  if (!(await consumeRateLimit(`matcher-stash:${ip}`, 20, 3600))) throw new ActionError("Too many requests from this connection. Try again in an hour or call us.");
+  const token = await stashValue({ request: input.request, carrierOrgId: input.carrierOrgId ?? null, phone: input.phone || null }, 30);
+  (await cookies()).set(MOVING_STASH_COOKIE, token, { path: MOVING_CLAIM_PATH, httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 1800 });
+  return { ok: true as const };
+});
 
 export const findMatchesAction = actionClient.inputSchema(moveRequestSchema).action(async ({ parsedInput: input }) => {
   const ip = await clientIp();
@@ -51,20 +71,8 @@ export const bookInstantQuoteAction = actionClient.inputSchema(bookingSchema).ac
   };
   const built = buildMoveLoad(req, route, quote);
 
-  const session = await getSession();
-  if (session) {
-    const actor = await getActor(session.user.id);
-    if (actor.accountType !== "shipper") throw new ActionError("You're signed in with a carrier account. Sign in as a shipper to book a move.");
-    if (session.user.email.toLowerCase() !== input.contact.email.toLowerCase()) {
-      throw new ActionError(`You're signed in as ${session.user.email}. Use that email or sign out first.`);
-    }
-    const row = await db.transaction((tx) => insertMoveLoad(tx, actor.userId, built, { publish: true, publishOnVerify: false }));
-    const placed = await createInstantBid(row.id);
-    await enrollFollowup(actor.email, actor.userId, row.id, row.publicId);
-    revalidatePath("/app/loads");
-    const href = `/app/loads/${row.publicId}${placed ? `?bid=${placed.bidId}` : ""}#bids`;
-    return { status: "booked" as const, href };
-  }
+  const signedIn = await signedInShipper(input.contact.email);
+  if (signedIn) return { status: "booked" as const, href: await publishForShipper(signedIn, built, input.contact.phone) };
 
   const started = await startMovingFunnel({ contact: input.contact, marketingOptIn: input.marketingOptIn, built });
   return started.kind === "new" ? { status: "redirect" as const, href: started.url } : { status: "sign_in" as const, href: started.href };
@@ -79,18 +87,8 @@ export const requestMoveBidsAction = actionClient.inputSchema(bidRequestSchema).
   if ("error" in route) throw new ActionError("We couldn't find one of the addresses. Search again.");
   const built = buildMoveLoad(input.request, route, null);
 
-  const session = await getSession();
-  if (session) {
-    const actor = await getActor(session.user.id);
-    if (actor.accountType !== "shipper") throw new ActionError("You're signed in with a carrier account. Sign in as a shipper to post a move.");
-    if (session.user.email.toLowerCase() !== input.contact.email.toLowerCase()) {
-      throw new ActionError(`You're signed in as ${session.user.email}. Use that email or sign out first.`);
-    }
-    const row = await db.transaction((tx) => insertMoveLoad(tx, actor.userId, built, { publish: true, publishOnVerify: false }));
-    await enrollFollowup(actor.email, actor.userId, row.id, row.publicId);
-    revalidatePath("/app/loads");
-    return { status: "booked" as const, href: `/app/loads/${row.publicId}` };
-  }
+  const signedIn = await signedInShipper(input.contact.email);
+  if (signedIn) return { status: "booked" as const, href: await publishForShipper(signedIn, built, input.contact.phone) };
 
   const started = await startMovingFunnel({ contact: input.contact, marketingOptIn: input.marketingOptIn, built });
   return started.kind === "new" ? { status: "redirect" as const, href: started.url } : { status: "sign_in" as const, href: started.href };

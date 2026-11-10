@@ -35,6 +35,7 @@ import {
   verifiedIcon,
 } from "@/components/ui/icons.generated";
 import { site, type ReviewProfile } from "@/content/site";
+import { env } from "@/env";
 import { MovingBooking } from "@/features/moving/booking";
 import { movingAdvantages, movingBenefits, movingFaq, movingGallery } from "@/features/moving/content";
 import { FloatingQuoteButton } from "@/features/moving/floating-cta";
@@ -48,7 +49,7 @@ export const revalidate = 3600;
 const path = "/moving";
 const title = "Compare Moving Quotes from Verified Movers";
 const description =
-  "Enter your ZIP codes and home size to compare prices from FMCSA-checked movers for local and long-distance moves. No sign-up to see prices, and your payment stays in escrow until delivery.";
+  "Enter your ZIP codes and home size to compare prices from movers for local and long-distance moves. No sign-up to see prices, and your payment stays in escrow until delivery.";
 
 export const metadata = buildMetadata({ title, description, path });
 
@@ -99,8 +100,8 @@ const movingTimeline: TimelineStep[] = [
 const valueProps = [
   {
     icon: verifiedIcon,
-    title: "Checked movers only",
-    body: "Every mover's USDOT and operating authority are checked against FMCSA records before they can quote.",
+    title: "Authority status on every mover",
+    body: "Each mover shows whether its USDOT and operating authority are verified with FMCSA, so you know who you're booking.",
   },
   {
     icon: receiptLongIcon,
@@ -199,13 +200,14 @@ export default async function MovingPage() {
               Compare moving prices from verified movers
             </h1>
             <p className="text-body-lg medium:text-title-lg medium:font-normal mt-4 max-w-[600px] text-pretty text-white/85">
-              Enter two ZIP codes and your home size. See what FMCSA-checked movers charge, book online, and
+              Enter two ZIP codes and your home size. See what movers charge, book online, and
               pay only after your things arrive.
             </p>
           </div>
           <div className="medium:mt-10 mt-8">
             <MovingBooking
               feePercent={site.platformFeePercent}
+              googleEnabled={Boolean(env.GOOGLE_CLIENT_ID)}
               icons={{
                 search: icon(searchIcon),
                 from: icon(tripOriginIcon),
