@@ -101,18 +101,20 @@ function MatchRow({ match, icons, feePercent, onChoose, first, locked }: { match
       {locked ? (
         <div aria-hidden="true" className="pointer-events-none flex items-center justify-between gap-4 blur-[7px] select-none medium:flex-col medium:items-end medium:justify-start">
           <p className="medium:text-right">
-            <span className="block text-headline-sm text-on-surface tabular-nums">$0,000.00</span>
-            <span className="block text-body-sm text-on-surface-variant">reserve with 10%</span>
+            <span className="block text-label-md text-on-surface-variant">Reserve today</span>
+            <span className="block text-headline-sm text-on-surface tabular-nums">$000.00</span>
+            <span className="block text-body-sm text-on-surface-variant">$0,000.00 total, rest on delivery</span>
           </p>
           <span className="inline-flex h-10 items-center rounded-full bg-secondary-container px-6 text-label-lg text-on-secondary-container">Choose</span>
         </div>
       ) : (
         <div className="flex items-center justify-between gap-4 medium:flex-col medium:items-end medium:justify-start">
           <p className="medium:text-right">
-            <span className="block text-headline-sm text-on-surface tabular-nums">{formatUsd(match.shipperTotalCents)}</span>
-            <span className="block text-body-sm text-on-surface-variant">reserve today for {formatUsd(match.platformFeeCents)}</span>
+            <span className="block text-label-md text-on-surface-variant">Reserve today</span>
+            <span className="block text-headline-sm text-on-surface tabular-nums">{formatUsd(match.platformFeeCents)}</span>
+            <span className="block text-body-sm text-on-surface-variant">{formatUsd(match.shipperTotalCents)} total, rest on delivery</span>
           </p>
-          <Button onClick={onChoose} variant={first ? "filled" : "tonal"} aria-label={`Choose ${match.name} for ${formatUsd(match.shipperTotalCents)}`}>
+          <Button onClick={onChoose} variant={first ? "filled" : "tonal"} aria-label={`Choose ${match.name}, reserve for ${formatUsd(match.platformFeeCents)}, ${formatUsd(match.shipperTotalCents)} total`}>
             Choose
           </Button>
         </div>
@@ -165,10 +167,10 @@ export function MatchList({ results, icons, feePercent, onChoose, onRequestBids,
       <p className="mt-1 text-body-md text-on-surface-variant">
         {locked ? (
           <>
-            Prices from <span className="text-title-md text-on-surface tabular-nums">{formatUsd(matches[0]!.shipperTotalCents)}</span>, all in. Reserve your mover with {feePercent}% today, the rest is paid on delivery.
+            Reserve from <span className="text-title-md text-on-surface tabular-nums">{formatUsd(matches[0]!.platformFeeCents)}</span> today. Moves from {formatUsd(matches[0]!.shipperTotalCents, true)} all in, the rest is paid to the mover on delivery.
           </>
         ) : (
-          `Sorted by total price, our ${feePercent}% fee included. Reserve with ${feePercent}% today, pay the rest to the mover on delivery.`
+          `Reserve any mover with ${feePercent}% today and pay the rest on delivery. Sorted by total price.`
         )}
       </p>
       {locked && unlock}

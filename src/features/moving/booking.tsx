@@ -423,7 +423,7 @@ export function MovingBooking({ icons, feePercent, googleEnabled = false }: { ic
           <MatchList
             locked={!me && !unlocked && results.matches.length > 0}
             unlock={
-              <form onSubmit={onUnlock} noValidate aria-label="Unlock your prices" className="my-5 flex flex-col gap-4 rounded-lg border border-primary/40 bg-primary-container/30 p-5">
+              <form onSubmit={onUnlock} noValidate aria-label="Unlock your prices" className="my-5 flex flex-col gap-4 rounded-lg border border-primary/50 bg-surface-container-high p-5 [--field-bg:var(--md-surface-container-high)]">
                 <div>
                   <h3 className="text-title-lg text-on-surface">See every price and reserve your mover</h3>
                   <p className="mt-1 text-body-md text-pretty text-on-surface-variant">Free. We save your move to an AllShip account so you can book in one click, and a moving advisor can help with your inventory.</p>
