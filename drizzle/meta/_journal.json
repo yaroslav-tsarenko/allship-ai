@@ -43,6 +43,13 @@
       "when": 1791143750547,
       "tag": "0005_nurture_sends",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794415812399,
+      "tag": "0006_square_oauth",
+      "breakpoints": true
     }
   ]
 }

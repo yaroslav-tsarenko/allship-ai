@@ -1,5 +1,5 @@
-import { index, jsonb, pgTable, primaryKey, text } from "drizzle-orm/pg-core";
-import { createdAt, id } from "./_helpers";
+import { index, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import { createdAt, id, updatedAt } from "./_helpers";
 import { user } from "./auth";
 
 export const auditLog = pgTable(
@@ -40,3 +40,17 @@ export const tourProgress = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.tourId] })],
 );
+
+export const squareConnection = pgTable("square_connection", {
+  merchantId: text().primaryKey(),
+  environment: text().notNull(),
+  accessToken: text().notNull(),
+  refreshToken: text().notNull(),
+  expiresAt: timestamp({ withTimezone: true }).notNull(),
+  scopes: text().array().notNull(),
+  locationId: text(),
+  businessName: text(),
+  connectedAt: createdAt(),
+  updatedAt: updatedAt(),
+  revokedAt: timestamp({ withTimezone: true }),
+});
