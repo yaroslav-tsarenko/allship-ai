@@ -12,7 +12,9 @@ export function InvoiceEmail({ invoice }: { invoice: Invoice }) {
     <EmailLayout preview={`Invoice ${invoice.number}: ${usd(invoice.totalCents)} paid, held in escrow until delivery`}>
       <Text style={emailStyles.h1}>Thanks, your move is booked</Text>
       <Text style={emailStyles.p}>
-        We received {usd(invoice.totalCents)} for {invoice.load.publicId}. The money stays in escrow and goes to {invoice.carrier} only after you confirm delivery.
+        {invoice.balanceCents > 0
+          ? `We received your ${usd(invoice.totalCents)} booking fee for ${invoice.load.publicId}. ${invoice.carrier} is reserved; you pay them ${usd(invoice.balanceCents)} on delivery.`
+          : `We received ${usd(invoice.totalCents)} for ${invoice.load.publicId}. The money stays in escrow and goes to ${invoice.carrier} only after you confirm delivery.`}
       </Text>
       <Section style={{ border: "1px solid #dfe2eb", borderRadius: "12px", padding: "20px", margin: "8px 0 24px" }}>
         <Row>
@@ -51,6 +53,16 @@ export function InvoiceEmail({ invoice }: { invoice: Invoice }) {
             <Text style={{ ...strong, fontSize: "16px" }}>{usd(invoice.totalCents)}</Text>
           </Column>
         </Row>
+        {invoice.balanceCents > 0 && (
+          <Row>
+            <Column>
+              <Text style={cell}>Balance due to {invoice.carrier} on delivery</Text>
+            </Column>
+            <Column align="right">
+              <Text style={cell}>{usd(invoice.balanceCents)}</Text>
+            </Column>
+          </Row>
+        )}
       </Section>
       <Button href={invoice.url} style={emailStyles.button}>
         View or download invoice

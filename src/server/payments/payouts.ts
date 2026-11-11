@@ -94,6 +94,7 @@ export async function sendTransfer(payoutId: string) {
     }
     await tx.insert(loadEvent).values({ loadId: row.payout.loadId, type: "payout_sent", payload: { payoutId: row.payout.id, amountCents: row.payout.amountCents, transferId } });
   });
+  if (row.payout.amountCents <= 0) return { ...row.payout, status: "paid" as const, stripeTransferId: transferId };
   await notifyUsers(await orgStaffIds(row.payout.carrierOrgId), {
     type: "payout_sent",
     title: `${formatUsd(row.payout.amountCents)} is on its way`,

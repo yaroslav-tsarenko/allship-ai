@@ -21,6 +21,7 @@ export type PaymentInfo = {
   feeCents: number;
   carrierCents: number;
   carrierName?: string;
+  balanceCents?: number;
 };
 
 let stripePromise: Promise<Stripe | null> | null = null;
@@ -30,7 +31,29 @@ const getStripeJs = () => {
   return stripePromise;
 };
 
-export function PriceBreakdown({ carrierCents, feeCents, totalCents, feeLabel = "AllShip service fee" }: { carrierCents: number; feeCents: number; totalCents: number; feeLabel?: string }) {
+export function PriceBreakdown({ carrierCents, feeCents, totalCents, feeLabel = "AllShip service fee", balanceCents = 0 }: { carrierCents: number; feeCents: number; totalCents: number; feeLabel?: string; balanceCents?: number }) {
+  if (balanceCents > 0) {
+    return (
+      <dl className="flex flex-col gap-2 text-body-lg">
+        <div className="flex justify-between gap-4">
+          <dt className="text-on-surface-variant">Mover&rsquo;s price</dt>
+          <dd className="tabular-nums text-on-surface">{formatUsd(carrierCents)}</dd>
+        </div>
+        <div className="flex justify-between gap-4">
+          <dt className="text-on-surface-variant">{feeLabel}</dt>
+          <dd className="tabular-nums text-on-surface">{formatUsd(feeCents)}</dd>
+        </div>
+        <div className="mt-1 flex justify-between gap-4 border-t border-outline-variant pt-3">
+          <dt className="text-title-md text-on-surface">Due today to reserve</dt>
+          <dd className="text-title-lg tabular-nums text-on-surface">{formatUsd(totalCents)}</dd>
+        </div>
+        <div className="flex justify-between gap-4 text-body-md">
+          <dt className="text-on-surface-variant">Paid to the mover on delivery</dt>
+          <dd className="tabular-nums text-on-surface-variant">{formatUsd(balanceCents)}</dd>
+        </div>
+      </dl>
+    );
+  }
   return (
     <dl className="flex flex-col gap-2 text-body-lg">
       <div className="flex justify-between gap-4">
@@ -127,7 +150,7 @@ export function PaymentStep({ info, publicId, onDone }: { info: PaymentInfo; pub
     const confirm = async () => {
       const res = await executeAsync({ paymentId: info.paymentId });
       if (res?.serverError) return void toast.error(res.serverError);
-      toast(`Booked. ${formatUsd(info.totalCents)} is held until delivery.`);
+      toast(info.balanceCents ? `Reserved. Pay the mover ${formatUsd(info.balanceCents)} on delivery.` : `Booked. ${formatUsd(info.totalCents)} is held until delivery.`);
       onDone?.();
       router.refresh();
     };
@@ -142,7 +165,7 @@ export function PaymentStep({ info, publicId, onDone }: { info: PaymentInfo; pub
             Stripe isn&rsquo;t connected in this environment, so no card is charged. Confirming books the carrier exactly as a real payment would.
           </p>
         </div>
-        <PriceBreakdown carrierCents={info.carrierCents} feeCents={info.feeCents} totalCents={info.totalCents} />
+        <PriceBreakdown carrierCents={info.carrierCents} feeCents={info.feeCents} totalCents={info.totalCents} balanceCents={info.balanceCents} feeLabel={info.balanceCents ? "AllShip booking fee" : undefined} />
         <Button size="lg" onClick={confirm} loading={isPending} className="w-full">
           Confirm test payment
         </Button>
@@ -162,7 +185,7 @@ export function PaymentStep({ info, publicId, onDone }: { info: PaymentInfo; pub
 
   return (
     <div className="flex flex-col gap-5">
-      <PriceBreakdown carrierCents={info.carrierCents} feeCents={info.feeCents} totalCents={info.totalCents} />
+      <PriceBreakdown carrierCents={info.carrierCents} feeCents={info.feeCents} totalCents={info.totalCents} balanceCents={info.balanceCents} feeLabel={info.balanceCents ? "AllShip booking fee" : undefined} />
       <Elements
         stripe={stripe}
         options={{

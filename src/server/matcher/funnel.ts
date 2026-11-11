@@ -120,3 +120,42 @@ export async function publishForShipper(shipper: { id: string; email: string; ph
   });
   return `/app/loads/${row.publicId}?welcome=1${placed ? `&bid=${placed.bidId}#bids` : ""}`;
 }
+
+export type UnlockSummary = { route: string; date: string; bedrooms: number; movers: number; fromCents: number | null };
+
+export function noteUnlockLead(person: { id: string; name: string; email: string; phone: string; isNew: boolean }, summary: UnlockSummary, marketingOptIn: boolean, attribution: ReturnType<typeof parseAttribution>) {
+  after(async () => {
+    try {
+      const { gclid, gbraid, wbraid, ...utm } = attribution;
+      await db.insert(lead).values({
+        type: "quote",
+        status: "new",
+        email: person.email,
+        name: person.name,
+        phone: person.phone || null,
+        userId: person.id,
+        gclid: gclid ?? gbraid ?? wbraid ?? null,
+        utm: Object.fromEntries(Object.entries(utm).filter((e): e is [string, string] => typeof e[1] === "string")),
+        payload: { form: "moving_unlock", path: "/moving", ...summary, marketingOptIn },
+      });
+      await attachUser(person.email, person.id);
+      const price = summary.fromCents !== null ? `, from ${formatUsd(summary.fromCents)} (${summary.movers} movers)` : ", no instant prices";
+      await notifyAdmins(`New moving lead, call now: ${person.name}, ${person.phone || "no phone"}, ${person.email}. ${summary.route}, ${summary.bedrooms} BR, ${summary.date}${price}. ${person.isNew ? "New account" : "Existing account"}.`);
+    } catch (err) {
+      log.error("moving unlock follow-up failed", { scope: "matcher", err });
+    }
+  });
+}
+
+export async function unlockQuotes({ contact, marketingOptIn, summary }: { contact: MovingFunnelInput["contact"]; marketingOptIn: boolean; summary: UnlockSummary }) {
+  const email = contact.email.trim().toLowerCase();
+  if (!contact.phone) throw new ActionError("Enter your phone so the mover can confirm details.");
+  const shipper = await ensureShipper(email, contact);
+  if (shipper.isNew) {
+    const token = await createMagicToken(email, 0.25);
+    await auth.api.magicLinkVerify({ query: { token }, headers: await headers() });
+  }
+  const attribution = parseAttribution((await cookies()).get(ATTRIBUTION_COOKIE)?.value);
+  noteUnlockLead({ id: shipper.id, name: contact.name, email, phone: contact.phone, isNew: shipper.isNew }, summary, marketingOptIn, attribution);
+  return { signedIn: shipper.isNew };
+}

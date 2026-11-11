@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, inArray, lt } from "drizzle-orm";
 import type Stripe from "stripe";
 import { env } from "@/env";
-import { feeFor, formatUsd } from "@/lib/money";
+import { formatUsd } from "@/lib/money";
 import { ActionError } from "@/server/actions/safe-action";
 import type { Actor } from "@/server/actor";
 import { db } from "@/server/db/client";
@@ -12,6 +12,7 @@ import { transitionLoad } from "@/server/loads/service";
 import { notifyUsers, orgStaffIds } from "@/server/notifications/notify";
 import { notifyAdmins } from "@/server/notify/telegram";
 import { sendInvoice } from "./invoice";
+import { bookingAmounts } from "@/lib/deposit";
 import { getStripe, simulatedPayments } from "./stripe";
 import { refreshCarrierActivation, safely, setEnrollmentStatus } from "@/server/nurture";
 
@@ -33,7 +34,8 @@ export async function createPaymentForBid(actor: Actor, target: LoadRow, chosen:
     .where(and(eq(payment.loadId, target.id), eq(payment.bidId, chosen.id), inArray(payment.status, ["requires_payment", "processing"])))
     .limit(1);
 
-  const amounts = feeFor(chosen.amountCents, env.PLATFORM_FEE_BPS);
+  const booking = bookingAmounts(target.category, chosen.amountCents, env.PLATFORM_FEE_BPS);
+  const amounts = { shipperTotalCents: booking.dueNowCents, platformFeeCents: booking.feeCents, carrierAmountCents: booking.escrowCarrierCents, balanceCents: booking.onDeliveryCents };
 
   const paymentRow =
     existing ??
@@ -136,14 +138,20 @@ export async function markPaymentSucceeded(ref: { paymentIntentId?: string; paym
     notifyUsers([outcome.load.shipperId], {
       type: "load_booked",
       title: `${outcome.load.publicId} is booked`,
-      body: `You booked ${org?.name ?? "the carrier"} for ${formatUsd(outcome.payment.carrierAmountCents)}. Your payment of ${formatUsd(outcome.payment.amountCents)} is held until delivery.`,
+      body:
+        outcome.payment.carrierAmountCents === 0
+          ? `You reserved ${org?.name ?? "the mover"} for ${outcome.load.publicId}. Your ${formatUsd(outcome.payment.amountCents)} booking fee is paid; pay the mover ${formatUsd(outcome.bid.amountCents)} on delivery.`
+          : `You booked ${org?.name ?? "the carrier"} for ${formatUsd(outcome.payment.carrierAmountCents)}. Your payment of ${formatUsd(outcome.payment.amountCents)} is held until delivery.`,
       href: `/app/loads/${outcome.load.publicId}`,
       email: { subject: `Booked: ${outcome.load.title}`, actionLabel: "View load" },
     }),
     notifyUsers(carrierStaff, {
       type: "bid_won",
       title: `You won ${outcome.load.publicId}`,
-      body: `Your bid of ${formatUsd(outcome.payment.carrierAmountCents)} on "${outcome.load.title}" was accepted and paid into escrow. Assign a driver and confirm pickup details.`,
+      body:
+        outcome.payment.carrierAmountCents === 0
+          ? `The customer reserved you for "${outcome.load.title}" at ${formatUsd(outcome.bid.amountCents)}. They pay you on delivery. Call them to confirm inventory and pickup details.`
+          : `Your bid of ${formatUsd(outcome.payment.carrierAmountCents)} on "${outcome.load.title}" was accepted and paid into escrow. Assign a driver and confirm pickup details.`,
       href: `/app/board/${outcome.load.publicId}`,
       email: { subject: `Bid accepted: ${outcome.load.title}`, actionLabel: "Open the load" },
     }),

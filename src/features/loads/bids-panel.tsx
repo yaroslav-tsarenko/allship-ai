@@ -11,8 +11,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Icon } from "@/components/ui/icon";
 import { calendarMonthIcon, gavelIcon, localShippingIcon, lockClockIcon, starIcon, verifiedIcon } from "@/components/ui/icons.generated";
 import { StatusChip } from "@/components/ui/status-chip";
-import { feeFor, formatUsd } from "@/lib/money";
+import { formatUsd } from "@/lib/money";
 import { resumePaymentAction } from "@/server/actions/payments";
+import { bookingAmounts } from "@/lib/deposit";
 import { acceptBidAction } from "@/server/actions/marketplace";
 import type { LoadStatus } from "@/server/db/schema/enums";
 import { PaymentStep, PriceBreakdown, type PaymentInfo } from "./payment-step";
@@ -136,6 +137,7 @@ export function BidsPanel({
   feeBps,
   pending,
   highlightBidId = null,
+  category,
 }: {
   loadId: string;
   publicId: string;
@@ -145,6 +147,7 @@ export function BidsPanel({
   feeBps: number;
   pending: PaymentInfo | null;
   highlightBidId?: string | null;
+  category: string;
 }) {
   const router = useRouter();
   const [sort, setSort] = useState<Sort>("price");
@@ -189,7 +192,7 @@ export function BidsPanel({
     setPayment(null);
   };
 
-  const preview = selected ? feeFor(selected.amountCents, feeBps) : null;
+  const preview = selected ? bookingAmounts(category, selected.amountCents, feeBps) : null;
   const feePct = `${(feeBps / 100).toLocaleString("en-US")}%`;
 
   if (visible.length === 0) {
@@ -235,11 +238,15 @@ export function BidsPanel({
       <Dialog
         open={open}
         onOpenChange={close}
-        title={payment ? "Pay to book" : `Accept ${selected?.carrierName ?? "this bid"}?`}
+        title={payment ? (payment.balanceCents ? "Reserve your mover" : "Pay to book") : `Accept ${selected?.carrierName ?? "this bid"}?`}
         description={
           payment
-            ? `Your payment is held in escrow and released to ${payment.carrierName ?? selected?.carrierName ?? "the carrier"} after delivery.`
-            : "You'll pay now to lock in this carrier. Other carriers are notified once payment goes through."
+            ? payment.balanceCents
+              ? `Pay the booking fee to lock in ${payment.carrierName ?? selected?.carrierName ?? "the mover"}. You pay the mover the rest on delivery.`
+              : `Your payment is held in escrow and released to ${payment.carrierName ?? selected?.carrierName ?? "the carrier"} after delivery.`
+            : preview?.deposit
+              ? "Reserve this mover with the booking fee today. You pay the mover's price on delivery."
+              : "You'll pay now to lock in this carrier. Other carriers are notified once payment goes through."
         }
         actions={
           payment ? undefined : (
@@ -258,7 +265,7 @@ export function BidsPanel({
           <PaymentStep info={payment} publicId={publicId} onDone={() => close(false)} />
         ) : preview ? (
           <div className="flex flex-col gap-4">
-            <PriceBreakdown carrierCents={preview.carrierAmountCents} feeCents={preview.platformFeeCents} totalCents={preview.shipperTotalCents} feeLabel={`AllShip service fee (${feePct})`} />
+            <PriceBreakdown carrierCents={preview.carrierPriceCents} feeCents={preview.feeCents} totalCents={preview.dueNowCents} balanceCents={preview.onDeliveryCents} feeLabel={preview.deposit ? `AllShip booking fee (${feePct})` : `AllShip service fee (${feePct})`} />
             <p className="flex items-start gap-2 rounded-sm bg-surface-container p-3 text-body-sm text-on-surface-variant">
               <Icon icon={lockClockIcon} size={18} className="mt-px shrink-0" />
               We hold the load for you for 30 minutes while you pay. If payment isn&rsquo;t finished by then, the load reopens for bids.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { formatUsd } from "@/lib/money";
 import type { Match, MatchRoute } from "@/server/matcher/service";
@@ -46,7 +46,7 @@ export function Breakdown({ match, feePercent }: { match: Match; feePercent: num
   );
 }
 
-function MatchRow({ match, icons, feePercent, onChoose, first }: { match: Match; icons: BookingIcons; feePercent: number; onChoose: () => void; first: boolean }) {
+function MatchRow({ match, icons, feePercent, onChoose, first, locked }: { match: Match; icons: BookingIcons; feePercent: number; onChoose: () => void; first: boolean; locked: boolean }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const facts = [
@@ -91,27 +91,37 @@ function MatchRow({ match, icons, feePercent, onChoose, first }: { match: Match;
             <span key={f}>{f}</span>
           ))}
         </p>
-        <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls={panelId} className="mt-3 cursor-pointer text-label-lg font-medium text-primary">
+        <button type="button" hidden={locked} onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls={panelId} className="mt-3 cursor-pointer text-label-lg font-medium text-primary">
           {open ? "Hide price breakdown" : "See price breakdown"}
         </button>
         <div id={panelId} hidden={!open} className="mt-3 max-w-[520px] rounded-md bg-surface-container-low p-4">
           <Breakdown match={match} feePercent={feePercent} />
         </div>
       </div>
-      <div className="flex items-center justify-between gap-4 medium:flex-col medium:items-end medium:justify-start">
-        <p className="medium:text-right">
-          <span className="block text-headline-sm text-on-surface tabular-nums">{formatUsd(match.shipperTotalCents)}</span>
-          <span className="block text-body-sm text-on-surface-variant">total with {feePercent}% fee</span>
-        </p>
-        <Button onClick={onChoose} variant={first ? "filled" : "tonal"} aria-label={`Choose ${match.name} for ${formatUsd(match.shipperTotalCents)}`}>
-          Choose
-        </Button>
-      </div>
+      {locked ? (
+        <div aria-hidden="true" className="pointer-events-none flex items-center justify-between gap-4 blur-[7px] select-none medium:flex-col medium:items-end medium:justify-start">
+          <p className="medium:text-right">
+            <span className="block text-headline-sm text-on-surface tabular-nums">$0,000.00</span>
+            <span className="block text-body-sm text-on-surface-variant">reserve with 10%</span>
+          </p>
+          <span className="inline-flex h-10 items-center rounded-full bg-secondary-container px-6 text-label-lg text-on-secondary-container">Choose</span>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-4 medium:flex-col medium:items-end medium:justify-start">
+          <p className="medium:text-right">
+            <span className="block text-headline-sm text-on-surface tabular-nums">{formatUsd(match.shipperTotalCents)}</span>
+            <span className="block text-body-sm text-on-surface-variant">reserve today for {formatUsd(match.platformFeeCents)}</span>
+          </p>
+          <Button onClick={onChoose} variant={first ? "filled" : "tonal"} aria-label={`Choose ${match.name} for ${formatUsd(match.shipperTotalCents)}`}>
+            Choose
+          </Button>
+        </div>
+      )}
     </li>
   );
 }
 
-export function MatchList({ results, icons, feePercent, onChoose, onRequestBids }: { results: Results; icons: BookingIcons; feePercent: number; onChoose: (m: Match) => void; onRequestBids: () => void }) {
+export function MatchList({ results, icons, feePercent, onChoose, onRequestBids, locked = false, unlock }: { results: Results; icons: BookingIcons; feePercent: number; onChoose: (m: Match) => void; onRequestBids: () => void; locked?: boolean; unlock?: ReactNode }) {
   const { matches, requirements } = results;
 
   if (matches.length === 0) {
@@ -152,7 +162,16 @@ export function MatchList({ results, icons, feePercent, onChoose, onRequestBids 
       <h2 id="results-heading" tabIndex={-1} className="text-headline-sm text-on-surface outline-none">
         {matches.length === 1 ? "1 mover can take your move" : `${matches.length} movers can take your move`}
       </h2>
-      <p className="mt-1 text-body-md text-on-surface-variant">Sorted by total price, with our {feePercent}% fee included. Nothing is charged now.</p>
+      <p className="mt-1 text-body-md text-on-surface-variant">
+        {locked ? (
+          <>
+            Prices from <span className="text-title-md text-on-surface tabular-nums">{formatUsd(matches[0]!.shipperTotalCents)}</span>, all in. Reserve your mover with {feePercent}% today, the rest is paid on delivery.
+          </>
+        ) : (
+          `Sorted by total price, our ${feePercent}% fee included. Reserve with ${feePercent}% today, pay the rest to the mover on delivery.`
+        )}
+      </p>
+      {locked && unlock}
       {requirements.length > 0 && (
         <p className="mt-4 flex gap-2 rounded-md bg-surface-container-low p-4 text-body-md text-on-surface-variant">
           <span className="mt-px shrink-0">{icons.info}</span>
@@ -161,10 +180,10 @@ export function MatchList({ results, icons, feePercent, onChoose, onRequestBids 
       )}
       <ul className="mt-2">
         {matches.map((m, i) => (
-          <MatchRow key={m.carrierOrgId} match={m} icons={icons} feePercent={feePercent} first={i === 0} onChoose={() => onChoose(m)} />
+          <MatchRow key={m.carrierOrgId} match={m} icons={icons} feePercent={feePercent} first={i === 0} locked={locked} onChoose={() => onChoose(m)} />
         ))}
       </ul>
-      <button type="button" onClick={onRequestBids} className="mt-2 w-fit cursor-pointer text-label-lg font-medium text-primary">
+      <button type="button" hidden={locked} onClick={onRequestBids} className="mt-2 w-fit cursor-pointer text-label-lg font-medium text-primary">
         None of these? Get bids from more movers
       </button>
     </div>

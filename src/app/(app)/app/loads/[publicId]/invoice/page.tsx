@@ -84,10 +84,19 @@ export default async function InvoicePage({ params }: Props) {
               <td className="pt-4 text-title-md">Total paid</td>
               <td className="pt-4 text-right text-title-lg tabular-nums">{formatUsd(invoice.totalCents)}</td>
             </tr>
+            {invoice.balanceCents > 0 && (
+              <tr>
+                <td className="pt-2 text-body-md text-on-surface-variant">Balance due to {invoice.carrier} on delivery</td>
+                <td className="pt-2 text-right text-body-md tabular-nums text-on-surface-variant">{formatUsd(invoice.balanceCents)}</td>
+              </tr>
+            )}
           </tfoot>
         </table>
         <p className="mt-8 text-body-sm text-pretty text-on-surface-variant">
-          Your payment is held in escrow and released to {invoice.carrier} after you confirm delivery, or automatically if no dispute is opened. Questions about this invoice: {invoice.issuer.email}.
+          {invoice.balanceCents > 0
+            ? `This booking fee reserves ${invoice.carrier}. The balance is paid to the mover directly on delivery.`
+            : `Your payment is held in escrow and released to ${invoice.carrier} after you confirm delivery, or automatically if no dispute is opened.`}{" "}
+          Questions about this invoice: {invoice.issuer.email}.
         </p>
       </article>
     </div>

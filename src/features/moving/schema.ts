@@ -73,3 +73,16 @@ export const googleStashSchema = z.object({
   carrierOrgId: z.string().min(1).max(100).optional(),
   phone: z.string().trim().regex(/^\+?[0-9 ()-]{10,20}$/).or(z.literal("")).optional(),
 });
+
+export const unlockSchema = z.object({
+  contact: contactSchema.extend({ phone: contactSchema.shape.phone.or(z.literal("")) }),
+  marketingOptIn: z.boolean().default(false),
+  summary: z.object({
+    route: z.string().max(200),
+    date: z.string().max(20),
+    bedrooms: z.number().int().min(1).max(8),
+    movers: z.number().int().min(0).max(50),
+    fromCents: z.number().int().positive().nullable(),
+  }),
+  turnstileToken: z.string().max(4096).optional(),
+});

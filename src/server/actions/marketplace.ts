@@ -65,7 +65,7 @@ export const acceptBidAction = withActor.inputSchema(z.object({ bidId: z.uuid() 
   const result = await acceptBid(ctx.actor, parsedInput.bidId);
   revalidatePath("/app/loads", "layout");
   revalidateTag("open-loads", "max");
-  return { simulated: result.simulated, paymentId: result.paymentId, clientSecret: result.clientSecret, totalCents: result.amounts.shipperTotalCents, feeCents: result.amounts.platformFeeCents, carrierCents: result.amounts.carrierAmountCents };
+  return { simulated: result.simulated, paymentId: result.paymentId, clientSecret: result.clientSecret, totalCents: result.amounts.shipperTotalCents, feeCents: result.amounts.platformFeeCents, carrierCents: result.amounts.carrierAmountCents || result.amounts.balanceCents, balanceCents: result.amounts.balanceCents };
 });
 
 export const confirmSimulatedPaymentAction = withActor.inputSchema(z.object({ paymentId: z.uuid() })).action(async ({ parsedInput, ctx }) => {

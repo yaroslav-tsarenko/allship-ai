@@ -5,7 +5,7 @@ import { env } from "@/env";
 import { site } from "@/content/site";
 import { InvoiceEmail } from "@/emails/invoice-email";
 import { db } from "@/server/db/client";
-import { load, organization, payment, user } from "@/server/db/schema";
+import { bid, load, organization, payment, user } from "@/server/db/schema";
 import { sendEmail } from "@/server/email/send";
 import { simulatedPayments } from "./stripe";
 
@@ -19,6 +19,7 @@ export type Invoice = {
   load: { publicId: string; title: string; from: string; to: string; pickupDate: string | null };
   lines: Array<{ label: string; detail: string; cents: number }>;
   totalCents: number;
+  balanceCents: number;
   issuer: { name: string; address: string; email: string; phone: string };
   url: string;
 };
@@ -32,10 +33,11 @@ export function invoiceNumber(publicId: string, paymentId: string) {
 export async function buildInvoice(loadPublicId: string, shipperId?: string): Promise<Invoice | null> {
   const where = shipperId ? and(eq(load.publicId, loadPublicId), eq(load.shipperId, shipperId)) : eq(load.publicId, loadPublicId);
   const [row] = await db
-    .select({ load, payment, shipper: { name: user.name, email: user.email, phone: user.phone }, carrier: organization.name })
+    .select({ load, payment, bidCents: bid.amountCents, shipper: { name: user.name, email: user.email, phone: user.phone }, carrier: organization.name })
     .from(load)
     .innerJoin(payment, eq(payment.loadId, load.id))
     .innerJoin(user, eq(user.id, load.shipperId))
+    .innerJoin(bid, eq(bid.id, payment.bidId))
     .leftJoin(organization, eq(organization.id, load.carrierOrgId))
     .where(and(where, eq(payment.status, "succeeded")))
     .limit(1);
@@ -50,11 +52,15 @@ export async function buildInvoice(loadPublicId: string, shipperId?: string): Pr
     billedTo: { name: row.shipper.name, email: row.shipper.email, phone: row.shipper.phone },
     carrier: row.carrier ?? "Carrier",
     load: { publicId: row.load.publicId, title: row.load.title, from: place(row.load.pickup), to: place(row.load.dropoff), pickupDate: row.load.pickup.windowStart ?? null },
-    lines: [
-      { label: "Transport", detail: `${row.carrier ?? "Carrier"}, ${place(row.load.pickup)} → ${place(row.load.dropoff)}`, cents: p.carrierAmountCents },
-      { label: "AllShip service fee", detail: "Escrow, support and tracking", cents: p.platformFeeCents },
-    ],
+    lines:
+      p.carrierAmountCents === 0
+        ? [{ label: "Booking fee", detail: `Reserves ${row.carrier ?? "your mover"} for ${place(row.load.pickup)} → ${place(row.load.dropoff)}`, cents: p.platformFeeCents }]
+        : [
+            { label: "Transport", detail: `${row.carrier ?? "Carrier"}, ${place(row.load.pickup)} → ${place(row.load.dropoff)}`, cents: p.carrierAmountCents },
+            { label: "AllShip service fee", detail: "Escrow, support and tracking", cents: p.platformFeeCents },
+          ],
     totalCents: p.amountCents,
+    balanceCents: p.carrierAmountCents === 0 ? row.bidCents : 0,
     issuer: { name: site.legalName, address: `${a.street}, ${a.city}, ${a.region} ${a.postalCode}`, email: site.email, phone: site.phone.display },
     url: `${env.NEXT_PUBLIC_APP_URL}/app/loads/${row.load.publicId}/invoice`,
   };

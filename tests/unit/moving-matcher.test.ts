@@ -193,3 +193,11 @@ describe("full city index", () => {
     expect(lookupPlace("Boca Grande, FL", full)).toMatchObject({ city: "Boca Grande", state: "FL", precision: "city" });
   });
 });
+
+describe("booking deposit", () => {
+  it("charges only the 10% fee for moves and leaves the mover's price for delivery", async () => {
+    const { bookingAmounts } = await import("@/lib/deposit");
+    expect(bookingAmounts("long_distance_moving", 351000, 1000)).toEqual({ deposit: true, carrierPriceCents: 351000, feeCents: 35100, dueNowCents: 35100, escrowCarrierCents: 0, onDeliveryCents: 351000 });
+    expect(bookingAmounts("freight", 100000, 1000)).toMatchObject({ deposit: false, dueNowCents: 110000, escrowCarrierCents: 100000, onDeliveryCents: 0 });
+  });
+});

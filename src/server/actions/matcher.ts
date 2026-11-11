@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
-import { bidRequestSchema, bookingSchema, googleStashSchema, moveRequestSchema } from "@/features/moving/schema";
+import { bidRequestSchema, bookingSchema, googleStashSchema, moveRequestSchema, unlockSchema } from "@/features/moving/schema";
 import { stashValue } from "@/server/funnel/links";
 import { MOVING_CLAIM_PATH, MOVING_STASH_COOKIE } from "@/server/matcher/claim";
 import { tierGaps, validateTiers, volumeForBedrooms } from "@/features/moving/pricing";
@@ -16,7 +16,8 @@ import { buildMoveLoad, findMatches, priceCandidates, type InstantQuoteRecord } 
 import { resolveRoute } from "@/server/matcher/geo";
 import { clientIp, consumeRateLimit } from "@/server/rate-limit";
 import { verifyTurnstile } from "@/server/turnstile";
-import { publishForShipper, startMovingFunnel } from "@/server/matcher/funnel";
+import { ATTRIBUTION_COOKIE, parseAttribution } from "@/lib/attribution";
+import { noteUnlockLead, publishForShipper, startMovingFunnel, unlockQuotes } from "@/server/matcher/funnel";
 import { actionClient, ActionError, authedAction } from "./safe-action";
 
 async function signedInShipper(email: string) {
@@ -34,6 +35,20 @@ export const stashMoveForGoogleAction = actionClient.inputSchema(googleStashSche
   const token = await stashValue({ request: input.request, carrierOrgId: input.carrierOrgId ?? null, phone: input.phone || null }, 30);
   (await cookies()).set(MOVING_STASH_COOKIE, token, { path: MOVING_CLAIM_PATH, httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 1800 });
   return { ok: true as const };
+});
+
+export const unlockQuotesAction = actionClient.inputSchema(unlockSchema).action(async ({ parsedInput: input }) => {
+  const ip = await clientIp();
+  if (!(await consumeRateLimit(`matcher-unlock:${ip}`, 10, 3600))) throw new ActionError("Too many requests from this connection. Try again in an hour or call us.");
+  if (!(await verifyTurnstile(input.turnstileToken, ip))) throw new ActionError("Please complete the security check.");
+  const session = await getSession();
+  if (session) {
+    const phone = input.contact.phone || ((session.user as { phone?: string | null }).phone ?? "");
+    noteUnlockLead({ id: session.user.id, name: session.user.name || input.contact.name, email: session.user.email, phone, isNew: false }, input.summary, input.marketingOptIn, parseAttribution((await cookies()).get(ATTRIBUTION_COOKIE)?.value));
+    return { ok: true as const, signedIn: true };
+  }
+  const result = await unlockQuotes({ contact: input.contact, marketingOptIn: input.marketingOptIn, summary: input.summary });
+  return { ok: true as const, signedIn: result.signedIn };
 });
 
 export const findMatchesAction = actionClient.inputSchema(moveRequestSchema).action(async ({ parsedInput: input }) => {

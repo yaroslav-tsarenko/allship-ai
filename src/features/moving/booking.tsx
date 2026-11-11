@@ -15,7 +15,7 @@ import { GoogleButton } from "@/features/auth/google-button";
 import { AreaField } from "@/features/location/area-field";
 import { cn } from "@/lib/cn";
 import { formatUsd } from "@/lib/money";
-import { bookInstantQuoteAction, findMatchesAction, requestMoveBidsAction, stashMoveForGoogleAction } from "@/server/actions/matcher";
+import { bookInstantQuoteAction, findMatchesAction, requestMoveBidsAction, stashMoveForGoogleAction, unlockQuotesAction } from "@/server/actions/matcher";
 import { authClient } from "@/server/auth/client";
 import { MOVING_CLAIM_PATH } from "@/server/matcher/claim";
 import type { Match, MatchRoute } from "@/server/matcher/service";
@@ -101,6 +101,9 @@ export function MovingBooking({ icons, feePercent, googleEnabled = false }: { ic
   const sessionState = authClient.useSession();
   const me = sessionState.data?.user as { name: string; email: string; phone?: string | null; accountType?: string | null } | undefined;
   const [banner, setBanner] = useState<string | null>(null);
+  const [unlocked, setUnlocked] = useState(false);
+  const [resume, setResume] = useState(false);
+  const unlock = useAction(unlockQuotesAction);
   const [step, setStep] = useState<Step>("route");
   const [results, setResults] = useState<Results | null>(null);
   const [chosen, setChosen] = useState<Match | null>(null);
@@ -131,6 +134,7 @@ export function MovingBooking({ icons, feePercent, googleEnabled = false }: { ic
       if (saved) reset(saved);
       if (from) setValue("from", from, { shouldDirty: true });
       if (to) setValue("to", to, { shouldDirty: true });
+      if (params.get("resume") === "1" && saved?.from && saved.to && saved.pickupDate) setResume(true);
       const reason = params.get("notice");
       if (reason === "carrier-account") setBanner("That Google account is a carrier account. Book with a customer account or your email.");
       if (reason === "claim-failed") setBanner("We couldn't finish that booking. Search again and we'll get it done.");
@@ -162,6 +166,23 @@ export function MovingBooking({ icons, feePercent, googleEnabled = false }: { ic
     if (await trigger(["from", "to"], { shouldFocus: true })) go("home");
   };
 
+  const summaryOf = (r: Results) => ({
+    route: `${r.route.from} → ${r.route.to}`,
+    date: r.request.pickupDate,
+    bedrooms: r.request.bedrooms,
+    movers: r.matches.length,
+    fromCents: r.matches[0]?.shipperTotalCents ?? null,
+  });
+
+  const onUnlock = contact.handleSubmit(async (person) => {
+    if (!results) return;
+    const res = await unlock.executeAsync({ contact: person, marketingOptIn: optIn, summary: summaryOf(results), turnstileToken: captcha ?? undefined });
+    setCaptchaReset((n) => n + 1);
+    if (!res?.data?.ok) return;
+    setUnlocked(true);
+    if (res.data.signedIn) await sessionState.refetch();
+  });
+
   const onSearch = handleSubmit(async (values) => {
     const res = await search.executeAsync({ ...values, turnstileToken: captcha ?? undefined });
     setCaptchaReset((n) => n + 1);
@@ -172,9 +193,25 @@ export function MovingBooking({ icons, feePercent, googleEnabled = false }: { ic
       window.setTimeout(() => setError(data.field, { message: data.message }, { shouldFocus: true }), 40);
       return;
     }
-    setResults({ route: data.route, volumeCuFt: data.volumeCuFt, matches: data.matches, requirements: data.requirements, request: values });
+    const fresh = { route: data.route, volumeCuFt: data.volumeCuFt, matches: data.matches, requirements: data.requirements, request: values };
+    setResults(fresh);
+    if (me && fresh.matches.length > 0) {
+      const phone = window.sessionStorage.getItem(`${STORAGE_KEY}:phone`) ?? me.phone ?? "";
+      window.sessionStorage.removeItem(`${STORAGE_KEY}:phone`);
+      void unlock.executeAsync({ contact: { name: me.name || me.email, email: me.email, phone: /^\+?[0-9 ()-]{10,20}$/.test(phone) ? phone : "" }, marketingOptIn: false, summary: summaryOf(fresh) });
+    }
     setChosen(null);
     go("results");
+  });
+
+  useEffect(() => {
+    if (!resume || sessionState.isPending) return;
+    const id = window.setTimeout(() => {
+      setResume(false);
+      window.history.replaceState(null, "", window.location.pathname);
+      if (me) void onSearch();
+    }, 0);
+    return () => window.clearTimeout(id);
   });
 
   useEffect(() => {
@@ -384,6 +421,41 @@ export function MovingBooking({ icons, feePercent, googleEnabled = false }: { ic
       {step === "results" && results && (
         <div data-step-focus tabIndex={-1} className="outline-none">
           <MatchList
+            locked={!me && !unlocked && results.matches.length > 0}
+            unlock={
+              <form onSubmit={onUnlock} noValidate aria-label="Unlock your prices" className="my-5 flex flex-col gap-4 rounded-lg border border-primary/40 bg-primary-container/30 p-5">
+                <div>
+                  <h3 className="text-title-lg text-on-surface">See every price and reserve your mover</h3>
+                  <p className="mt-1 text-body-md text-pretty text-on-surface-variant">Free. We save your move to an AllShip account so you can book in one click, and a moving advisor can help with your inventory.</p>
+                </div>
+                <div className="grid gap-4 medium:grid-cols-3">
+                  <TextField label="Full name" autoComplete="name" error={ce.name?.message} required {...contact.register("name")} />
+                  <TextField label="Email" type="email" autoComplete="email" inputMode="email" error={ce.email?.message} required {...contact.register("email")} />
+                  <TextField label="Phone" type="tel" autoComplete="tel" inputMode="tel" error={ce.phone?.message} required {...contact.register("phone")} />
+                </div>
+                <Turnstile onToken={onToken} resetKey={captchaReset} />
+                <div className="grid gap-3 medium:grid-cols-2">
+                  <Button type="submit" size="lg" loading={unlock.isPending} className="h-14">
+                    Unlock my prices
+                  </Button>
+                  {googleEnabled && (
+                    <GoogleButton
+                      callbackURL="/moving?resume=1"
+                      newUserCallbackURL="/moving?resume=1"
+                      errorCallbackURL="/moving"
+                      onBeforeRedirect={async () => {
+                        const phone = contact.getValues("phone").trim();
+                        if (phone) window.sessionStorage.setItem(`${STORAGE_KEY}:phone`, phone);
+                        return true;
+                      }}
+                    />
+                  )}
+                </div>
+                <p aria-live="polite" className="text-body-md text-error empty:hidden">
+                  {unlock.result.serverError ?? ""}
+                </p>
+              </form>
+            }
             results={results}
             icons={icons}
             feePercent={feePercent}
@@ -406,15 +478,20 @@ export function MovingBooking({ icons, feePercent, googleEnabled = false }: { ic
               {chosen ? `Book ${chosen.name}` : "Where should movers send prices?"}
             </h2>
             <p className="mt-2 text-body-lg text-pretty text-on-surface-variant">
-              {chosen ? "We send the booking request to the mover now. They call to confirm the details before pickup." : "We post your move right away and verified movers send their bids to your AllShip account."}
+              {chosen ? "We send your booking to the mover now. You reserve them with our 10% fee on the next screen and pay the rest on delivery." : "We post your move right away and verified movers send their bids to your AllShip account."}
             </p>
           </div>
           {notice && <p className="rounded-md bg-warning-container p-3 text-body-md text-on-warning-container">{notice}</p>}
           {chosen && (
             <details className="rounded-md bg-surface-container-low p-4">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
-                <span className="text-title-sm text-on-surface">Total if you accept</span>
-                <span className="text-title-lg text-on-surface tabular-nums">{formatUsd(chosen.shipperTotalCents)}</span>
+                <span>
+                  <span className="block text-title-sm text-on-surface">Due today to reserve</span>
+                  <span className="block text-body-sm text-on-surface-variant">
+                    Total {formatUsd(chosen.shipperTotalCents)} · {formatUsd(chosen.carrierCents)} paid to the mover on delivery
+                  </span>
+                </span>
+                <span className="text-title-lg text-on-surface tabular-nums">{formatUsd(chosen.platformFeeCents)}</span>
               </summary>
               <div className="mt-4">
                 <Breakdown match={chosen} feePercent={feePercent} />
@@ -450,7 +527,7 @@ export function MovingBooking({ icons, feePercent, googleEnabled = false }: { ic
               {!me.phone && <TextField label="Phone" type="tel" autoComplete="tel" inputMode="tel" error={ce.phone?.message} supportingText="The mover calls to confirm details" required {...contact.register("phone")} />}
               <Turnstile onToken={onToken} resetKey={captchaReset} />
               <Button type="submit" size="lg" loading={submitting} className="h-14 w-full">
-                {chosen ? `Book for ${formatUsd(chosen.shipperTotalCents)}` : "Post my move"}
+                {chosen ? `Reserve for ${formatUsd(chosen.platformFeeCents)}` : "Post my move"}
               </Button>
             </>
           ) : (
@@ -485,10 +562,10 @@ export function MovingBooking({ icons, feePercent, googleEnabled = false }: { ic
               <Checkbox label="Send me moving tips and AllShip news. Unsubscribe anytime." checked={optIn} onCheckedChange={(v) => setOptIn(v === true)} />
               <Turnstile onToken={onToken} resetKey={captchaReset} />
               <Button type="submit" size="lg" loading={submitting} className="h-14 w-full">
-                {chosen ? `Book for ${formatUsd(chosen.shipperTotalCents)}` : "Get my prices"}
+                {chosen ? `Reserve for ${formatUsd(chosen.platformFeeCents)}` : "Get my prices"}
               </Button>
               <p className="text-body-sm text-pretty text-on-surface-variant">
-                This creates your free AllShip account. Nothing is charged until you accept a price, and your payment stays in escrow until delivery.
+                This creates your free AllShip account. Nothing is charged yet: you reserve the mover with our 10% fee and pay them the rest on delivery.
               </p>
             </>
           )}

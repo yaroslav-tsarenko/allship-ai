@@ -172,7 +172,9 @@ export default async function LoadDetailPage({ params, searchParams }: Props) {
               </h2>
               <p className="mt-1 max-w-[60ch] text-body-md">
                 {l.podRecipientName ? `Signed for by ${l.podRecipientName}${l.deliveredAt ? ` on ${formatDateTime(l.deliveredAt)}` : ""}. ` : ""}
-                Confirming releases {paid ? formatUsd(paid.carrierAmountCents) : "the payment"} from escrow to {carrierName}. If something&rsquo;s wrong, report it before payment releases.
+                {paid && paid.carrierAmountCents === 0
+                  ? `Confirm once everything arrived. You pay ${carrierName} the balance directly on delivery.`
+                  : `Confirming releases ${paid ? formatUsd(paid.carrierAmountCents) : "the payment"} from escrow to ${carrierName}. If something's wrong, report it before payment releases.`}
               </p>
               {releaseAt && (
                 <p className="mt-3 text-label-lg">
@@ -344,6 +346,7 @@ export default async function LoadDetailPage({ params, searchParams }: Props) {
                 feeBps={env.PLATFORM_FEE_BPS}
                 pending={pending}
                 highlightBidId={highlightBidId}
+                category={l.category}
               />
             </Card>
           )}
@@ -363,12 +366,14 @@ export default async function LoadDetailPage({ params, searchParams }: Props) {
                 Payment
               </h2>
               <dl className="mt-3 flex flex-col gap-1.5 text-body-md">
+                {paid.carrierAmountCents > 0 && (
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-on-surface-variant">Carrier price</dt>
+                    <dd className="text-on-surface tabular-nums">{formatUsd(paid.carrierAmountCents)}</dd>
+                  </div>
+                )}
                 <div className="flex justify-between gap-4">
-                  <dt className="text-on-surface-variant">Carrier price</dt>
-                  <dd className="text-on-surface tabular-nums">{formatUsd(paid.carrierAmountCents)}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-on-surface-variant">Service fee</dt>
+                  <dt className="text-on-surface-variant">{paid.carrierAmountCents === 0 ? "Booking fee" : "Service fee"}</dt>
                   <dd className="text-on-surface tabular-nums">{formatUsd(paid.platformFeeCents)}</dd>
                 </div>
                 <div className="flex justify-between gap-4 border-t border-outline-variant pt-1.5">
@@ -382,7 +387,9 @@ export default async function LoadDetailPage({ params, searchParams }: Props) {
                   </div>
                 )}
               </dl>
-              <p className="mt-4 rounded-sm bg-surface-container-low px-3 py-2 text-body-md text-on-surface-variant">{paymentNote(l.status, paid, post.payout, carrierName)}</p>
+              <p className="mt-4 rounded-sm bg-surface-container-low px-3 py-2 text-body-md text-on-surface-variant">
+                {paid.carrierAmountCents === 0 && l.status !== "cancelled" ? `Your mover is reserved. Pay ${carrierName} the rest of their price on delivery.` : paymentNote(l.status, paid, post.payout, carrierName)}
+              </p>
               <Button asChild variant="text" className="mt-2 -ml-3">
                 <Link href={`/app/loads/${l.publicId}/invoice`}>View invoice</Link>
               </Button>

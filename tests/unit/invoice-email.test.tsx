@@ -15,6 +15,7 @@ const invoice = {
     { label: "AllShip service fee", detail: "Escrow, support and tracking", cents: 35100 },
   ],
   totalCents: 386100,
+  balanceCents: 0,
   issuer: { name: "ALLSHIP AI INC", address: "254 Chapman Rd, Ste 209, Newark, DE 19702", email: "support@allship.ai", phone: "+1 (866) 228-2364" },
   url: "https://allship.ai/app/loads/AS-ZGNB7L/invoice",
 };

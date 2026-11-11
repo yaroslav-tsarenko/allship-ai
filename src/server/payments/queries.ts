@@ -13,13 +13,14 @@ export type PendingPayment = {
   feeCents: number;
   carrierCents: number;
   carrierName: string;
+  balanceCents: number;
   bidId: string;
   createdAt: Date;
 };
 
 export async function getPendingPayment(actor: Actor, loadId: string): Promise<PendingPayment | null> {
   const [row] = await db
-    .select({ payment, carrierName: organization.name })
+    .select({ payment, carrierName: organization.name, bidCents: bid.amountCents })
     .from(payment)
     .innerJoin(load, eq(load.id, payment.loadId))
     .innerJoin(bid, eq(bid.id, payment.bidId))
@@ -33,8 +34,9 @@ export async function getPendingPayment(actor: Actor, loadId: string): Promise<P
     paymentId: p.id,
     totalCents: p.amountCents,
     feeCents: p.platformFeeCents,
-    carrierCents: p.carrierAmountCents,
+    carrierCents: p.carrierAmountCents || row.bidCents,
     carrierName: row.carrierName,
+    balanceCents: p.carrierAmountCents === 0 ? row.bidCents : 0,
     bidId: p.bidId,
     createdAt: p.createdAt,
   };
