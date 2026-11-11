@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, ne, sql } from "drizzle-orm";
 import { env } from "@/env";
 import { categories } from "@/content/categories";
 import { LOAD_DETAILS_VERSION } from "@/features/loads/spec";
@@ -41,6 +41,13 @@ export type MatchResult =
   | { ok: true; route: MatchRoute; volumeCuFt: number; matches: Match[]; requirements: string[] }
   | { ok: false; field: "from" | "to"; message: string };
 
+export const TEST_MOVER_SLUG = "allship-test-mover";
+export const TEST_LANE = { from: "99501", to: "99503", bedrooms: 8 } as const;
+const TEST_MOVER_CENTS = 1000;
+
+export const isTestLane = (req: Pick<MoveRequestData, "bedrooms">, route: Pick<ResolvedRoute, "origin" | "destination">) =>
+  req.bedrooms === TEST_LANE.bedrooms && route.origin.postalCode === TEST_LANE.from && route.destination.postalCode === TEST_LANE.to;
+
 const allowUnverified = () => env.NODE_ENV !== "production" && process.env.ALLOW_UNVERIFIED_CARRIERS === "1";
 
 export function requirementsOf(req: Pick<MoveRequestData, "insurance" | "climateControlled" | "longTerm" | "storage">) {
@@ -62,9 +69,10 @@ type Candidate = {
   serviceStates: string[];
 };
 
-async function loadCandidates(route: { originState: string; destinationState: string; miles: number }, onlyOrgId?: string) {
+async function loadCandidates(route: { originState: string; destinationState: string; miles: number }, testLane: boolean, onlyOrgId?: string) {
   const miles = quoteMiles(route.miles);
   const where = [
+    testLane ? eq(organization.slug, TEST_MOVER_SLUG) : ne(organization.slug, TEST_MOVER_SLUG),
     eq(carrierProfile.instantQuotes, true),
     sql`${carrierProfile.instantQuoteMinMiles} <= ${miles}`,
     sql`${carrierProfile.instantQuoteMaxMiles} >= ${miles}`,
@@ -118,10 +126,13 @@ function requestOf(req: MoveRequestData, miles: number) {
 }
 
 export async function priceCandidates(req: MoveRequestData, route: ResolvedRoute, onlyOrgId?: string) {
-  const candidates = await loadCandidates({ originState: route.origin.state, destinationState: route.destination.state, miles: route.miles }, onlyOrgId);
+  const testLane = isTestLane(req, route);
+  const candidates = await loadCandidates({ originState: route.origin.state, destinationState: route.destination.state, miles: route.miles }, testLane, onlyOrgId);
   const priced: Omit<Match, "labels">[] = [];
   for (const c of candidates) {
-    const quote = priceMove(c.tiers, c.rates, requestOf(req, route.miles));
+    const quote = testLane
+      ? { tier: { fromMiles: 0, toMiles: 0, ratePerCuFtCents: 0 }, carrierCents: TEST_MOVER_CENTS, lines: [{ key: "transport" as const, label: "Payment test", detail: "not a real move, refund it in Square", cents: TEST_MOVER_CENTS }] }
+      : priceMove(c.tiers, c.rates, requestOf(req, route.miles));
     if (!quote) continue;
     const split = feeFor(quote.carrierCents, env.PLATFORM_FEE_BPS);
     priced.push({
