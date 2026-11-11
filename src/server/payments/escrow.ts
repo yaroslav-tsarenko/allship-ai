@@ -14,6 +14,7 @@ import { notifyAdmins } from "@/server/notify/telegram";
 import { sendInvoice } from "./invoice";
 import { bookingAmounts } from "@/lib/deposit";
 import { getStripe, simulatedPayments } from "./stripe";
+import { squareCheckout } from "@/server/square/oauth";
 import { refreshCarrierActivation, safely, setEnrollmentStatus } from "@/server/nurture";
 
 type LoadRow = typeof load.$inferSelect;
@@ -23,7 +24,8 @@ export const PAYMENT_WINDOW_MINUTES = 30;
 
 export async function createPaymentForBid(actor: Actor, target: LoadRow, chosen: BidRow) {
   const stripe = getStripe();
-  if (!stripe && !simulatedPayments()) throw new ActionError("Payments are not available right now. Try again later or contact support.");
+  const squarePay = stripe ? null : await squareCheckout();
+  if (!stripe && !squarePay && !simulatedPayments()) throw new ActionError("Payments are not available right now. Try again later or contact support.");
 
   const [carrier] = await db.select({ payoutsEnabled: carrierProfile.payoutsEnabled }).from(carrierProfile).where(eq(carrierProfile.orgId, chosen.carrierOrgId)).limit(1);
   if (stripe && !carrier?.payoutsEnabled) throw new ActionError("This carrier hasn't finished setting up payouts yet. Choose another bid or message them.");
@@ -59,7 +61,7 @@ export async function createPaymentForBid(actor: Actor, target: LoadRow, chosen:
       return created!;
     }));
 
-  if (!stripe) return { simulated: true as const, paymentId: paymentRow.id, clientSecret: null, amounts };
+  if (!stripe) return { simulated: !squarePay, square: squarePay, paymentId: paymentRow.id, clientSecret: null, amounts };
 
   let intent: Stripe.PaymentIntent;
   if (paymentRow.stripePaymentIntentId) {
@@ -80,10 +82,10 @@ export async function createPaymentForBid(actor: Actor, target: LoadRow, chosen:
     );
     await db.update(payment).set({ stripePaymentIntentId: intent.id }).where(eq(payment.id, paymentRow.id));
   }
-  return { simulated: false as const, paymentId: paymentRow.id, clientSecret: intent.client_secret, amounts };
+  return { simulated: false, square: null, paymentId: paymentRow.id, clientSecret: intent.client_secret, amounts };
 }
 
-export async function markPaymentSucceeded(ref: { paymentIntentId?: string; paymentId?: string; chargeId?: string | null }) {
+export async function markPaymentSucceeded(ref: { paymentIntentId?: string; paymentId?: string; chargeId?: string | null; squarePaymentId?: string }) {
   const where = ref.paymentIntentId ? eq(payment.stripePaymentIntentId, ref.paymentIntentId) : eq(payment.id, ref.paymentId ?? "");
   const outcome = await db.transaction(async (tx) => {
     const [p] = await tx.select().from(payment).where(where).limit(1).for("update");
@@ -92,7 +94,7 @@ export async function markPaymentSucceeded(ref: { paymentIntentId?: string; paym
     const [l] = await tx.select().from(load).where(eq(load.id, p.loadId)).limit(1).for("update");
     const [b] = await tx.select().from(bid).where(eq(bid.id, p.bidId)).limit(1);
     if (!l || !b) return null;
-    await tx.update(payment).set({ status: "succeeded", stripeChargeId: ref.chargeId ?? p.stripeChargeId }).where(eq(payment.id, p.id));
+    await tx.update(payment).set({ status: "succeeded", stripeChargeId: ref.chargeId ?? p.stripeChargeId, squarePaymentId: ref.squarePaymentId ?? p.squarePaymentId }).where(eq(payment.id, p.id));
     const journalId = randomUUID();
     await tx.insert(ledgerEntry).values([
       { journalId, account: "shipper_cash", amountCents: -p.amountCents, refType: "payment", refId: p.id, memo: `Paid ${l.publicId}` },
@@ -174,7 +176,7 @@ export async function markPaymentFailed(paymentIntentId: string, reason?: string
 }
 
 export async function confirmSimulatedPayment(actor: Actor, paymentId: string) {
-  if (!simulatedPayments()) throw new ActionError("Not available.");
+  if (!simulatedPayments() || (await squareCheckout())) throw new ActionError("Not available.");
   const [p] = await db.select().from(payment).where(and(eq(payment.id, paymentId), eq(payment.shipperId, actor.userId))).limit(1);
   if (!p) throw new ActionError("Payment not found.");
   if (p.status !== "requires_payment" && p.status !== "processing") throw new ActionError("This payment is no longer waiting. Refresh the page.");

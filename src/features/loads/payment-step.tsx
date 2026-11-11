@@ -12,10 +12,12 @@ import { lockIcon, scienceIcon, warningIcon } from "@/components/ui/icons.genera
 import { publicEnv as env } from "@/lib/public-env";
 import { formatUsd } from "@/lib/money";
 import { confirmSimulatedPaymentAction } from "@/server/actions/marketplace";
+import { SquareForm, type SquareCheckout } from "./square-form";
 
 export type PaymentInfo = {
   paymentId: string;
   simulated: boolean;
+  square?: SquareCheckout | null;
   clientSecret: string | null;
   totalCents: number;
   feeCents: number;
@@ -169,6 +171,15 @@ export function PaymentStep({ info, publicId, onDone }: { info: PaymentInfo; pub
         <Button size="lg" onClick={confirm} loading={isPending} className="w-full">
           Confirm test payment
         </Button>
+      </div>
+    );
+  }
+
+  if (info.square) {
+    return (
+      <div className="flex flex-col gap-5">
+        <PriceBreakdown carrierCents={info.carrierCents} feeCents={info.feeCents} totalCents={info.totalCents} balanceCents={info.balanceCents} feeLabel={info.balanceCents ? "AllShip booking fee" : undefined} />
+        <SquareForm checkout={info.square} paymentId={info.paymentId} totalCents={info.totalCents} balanceCents={info.balanceCents} onDone={onDone} />
       </div>
     );
   }

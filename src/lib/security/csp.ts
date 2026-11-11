@@ -51,6 +51,17 @@ const stripe = {
   assets: "https://*.stripe.com",
 };
 
+const square = {
+  cdn: "https://*.squarecdn.com",
+  web: "https://web.squarecdn.com",
+  sandboxWeb: "https://sandbox.web.squarecdn.com",
+  pci: "https://pci-connect.squareup.com",
+  pciSandbox: "https://pci-connect.squareupsandbox.com",
+  api: "https://*.squareup.com",
+  apiSandbox: "https://*.squareupsandbox.com",
+  cardinal: "https://*.cardinalcommerce.com",
+};
+
 const turnstile = "https://challenges.cloudflare.com";
 
 const maps = {
@@ -115,6 +126,8 @@ export function cspDirectives(options: CspOptions): Record<string, string[]> {
     turnstile,
     stripe.js,
     stripe.jsAll,
+    square.web,
+    square.sandboxWeb,
     maps.apis,
   ];
   const scriptSrc =
@@ -133,7 +146,7 @@ export function cspDirectives(options: CspOptions): Record<string, string[]> {
   const directives: Record<string, string[]> = {
     "default-src": ["'self'"],
     "script-src": scriptSrc,
-    "style-src": ["'self'", "'unsafe-inline'", maps.fontsCss],
+    "style-src": ["'self'", "'unsafe-inline'", maps.fontsCss, square.cdn],
     "img-src": [
       "'self'",
       "data:",
@@ -149,14 +162,21 @@ export function cspDirectives(options: CspOptions): Record<string, string[]> {
       google.google,
       google.adServices,
       stripe.assets,
+      square.cdn,
     ],
-    "font-src": ["'self'", "data:", maps.fonts],
+    "font-src": ["'self'", "data:", maps.fonts, square.cdn],
     "connect-src": [
       "'self'",
       ...supabase,
       ...supabaseRealtime,
       stripe.api,
       stripe.js,
+      square.cdn,
+      square.pci,
+      square.pciSandbox,
+      square.api,
+      square.apiSandbox,
+      square.cardinal,
       maps.apis,
       maps.places,
       google.gtm,
@@ -168,7 +188,7 @@ export function cspDirectives(options: CspOptions): Record<string, string[]> {
       turnstile,
       ...sentryOrigin(sentryDsn),
     ],
-    "frame-src": [stripe.js, stripe.jsAll, stripe.hooks, turnstile, google.gtm, google.tdDoubleclick],
+    "frame-src": [stripe.js, stripe.jsAll, stripe.hooks, square.cdn, square.api, square.apiSandbox, square.cardinal, turnstile, google.gtm, google.tdDoubleclick],
     "worker-src": ["'self'", "blob:"],
     "media-src": ["'self'", "blob:", ...supabase],
     "manifest-src": ["'self'"],

@@ -25,7 +25,18 @@ export function authorizeUrl(state: string) {
 
 type TokenResponse = { access_token: string; refresh_token: string; expires_at: string; merchant_id: string };
 
-async function square<T>(path: string, init: RequestInit & { token?: string } = {}) {
+export class SquareError extends Error {
+  constructor(
+    readonly path: string,
+    readonly status: number,
+    readonly code: string,
+    readonly detail?: string,
+  ) {
+    super(`Square ${path} ${status}: ${code}`);
+  }
+}
+
+export async function square<T>(path: string, init: RequestInit & { token?: string } = {}) {
   const { token, ...rest } = init;
   const res = await fetch(`${base()}${path}`, {
     ...rest,
@@ -34,7 +45,7 @@ async function square<T>(path: string, init: RequestInit & { token?: string } = 
     headers: { "Content-Type": "application/json", "Square-Version": SQUARE_VERSION, ...(token ? { Authorization: `Bearer ${token}` } : {}), ...rest.headers },
   });
   const data = (await res.json().catch(() => ({}))) as T & { errors?: Array<{ code?: string; detail?: string }>; message?: string };
-  if (!res.ok) throw new Error(`Square ${path} ${res.status}: ${data.errors?.[0]?.code ?? data.message ?? "error"}`);
+  if (!res.ok) throw new SquareError(path, res.status, data.errors?.[0]?.code ?? data.message ?? "error", data.errors?.[0]?.detail);
   return data;
 }
 
@@ -75,6 +86,15 @@ async function activeConnection() {
 
 export async function hasSquareConnection() {
   return Boolean(await activeConnection());
+}
+
+export type SquareCheckout = { applicationId: string; locationId: string; environment: "production" | "sandbox" };
+
+export async function squareCheckout(): Promise<SquareCheckout | null> {
+  if (!squareConfigured()) return null;
+  const row = await activeConnection();
+  if (!row?.locationId) return null;
+  return { applicationId: env.SQUARE_APPLICATION_ID!, locationId: row.locationId, environment: env.SQUARE_ENVIRONMENT };
 }
 
 async function refreshRow(row: typeof squareConnection.$inferSelect) {

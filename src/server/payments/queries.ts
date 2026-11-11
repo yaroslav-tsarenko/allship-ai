@@ -3,11 +3,13 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { bid, load, organization, payment } from "@/server/db/schema";
 import type { Actor } from "@/server/actor";
+import { squareCheckout, type SquareCheckout } from "@/server/square/oauth";
 import { getStripe, simulatedPayments } from "./stripe";
 
 export type PendingPayment = {
   paymentId: string;
   simulated: boolean;
+  square: SquareCheckout | null;
   clientSecret: string | null;
   totalCents: number;
   feeCents: number;
@@ -42,10 +44,13 @@ export async function getPendingPayment(actor: Actor, loadId: string): Promise<P
   };
   const stripe = getStripe();
   if (!stripe || !p.stripePaymentIntentId) {
-    if (!stripe && simulatedPayments()) return { ...base, simulated: true, clientSecret: null };
+    if (stripe) return null;
+    const squarePay = await squareCheckout();
+    if (squarePay) return { ...base, simulated: false, square: squarePay, clientSecret: null };
+    if (simulatedPayments()) return { ...base, simulated: true, square: null, clientSecret: null };
     return null;
   }
   const intent = await stripe.paymentIntents.retrieve(p.stripePaymentIntentId);
   if (intent.status === "canceled" || intent.status === "succeeded") return null;
-  return { ...base, simulated: false, clientSecret: intent.client_secret };
+  return { ...base, simulated: false, square: null, clientSecret: intent.client_secret };
 }

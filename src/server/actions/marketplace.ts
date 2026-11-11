@@ -12,6 +12,7 @@ import { cancelLoad, createLoad, relistLoad, updateDraft } from "@/server/loads/
 import { notifyUsers, orgStaffIds } from "@/server/notifications/notify";
 import { confirmSimulatedPayment, createConnectDashboardLink, createConnectOnboardingLink, refreshConnectedAccount } from "@/server/payments/escrow";
 import { consumeRateLimit } from "@/server/rate-limit";
+import { chargeSquare } from "@/server/square/payments";
 import { refreshCarrierActivation, safely } from "@/server/nurture";
 import { ActionError, authedAction } from "./safe-action";
 
@@ -65,7 +66,7 @@ export const acceptBidAction = withActor.inputSchema(z.object({ bidId: z.uuid() 
   const result = await acceptBid(ctx.actor, parsedInput.bidId);
   revalidatePath("/app/loads", "layout");
   revalidateTag("open-loads", "max");
-  return { simulated: result.simulated, paymentId: result.paymentId, clientSecret: result.clientSecret, totalCents: result.amounts.shipperTotalCents, feeCents: result.amounts.platformFeeCents, carrierCents: result.amounts.carrierAmountCents || result.amounts.balanceCents, balanceCents: result.amounts.balanceCents };
+  return { simulated: result.simulated, square: result.square, paymentId: result.paymentId, clientSecret: result.clientSecret, totalCents: result.amounts.shipperTotalCents, feeCents: result.amounts.platformFeeCents, carrierCents: result.amounts.carrierAmountCents || result.amounts.balanceCents, balanceCents: result.amounts.balanceCents };
 });
 
 export const confirmSimulatedPaymentAction = withActor.inputSchema(z.object({ paymentId: z.uuid() })).action(async ({ parsedInput, ctx }) => {
@@ -73,6 +74,14 @@ export const confirmSimulatedPaymentAction = withActor.inputSchema(z.object({ pa
   revalidatePath("/app/loads", "layout");
   revalidateTag("open-loads", "max");
   return { ok: true };
+});
+
+export const paySquareAction = withActor.inputSchema(z.object({ paymentId: z.uuid(), sourceId: z.string().min(8).max(512) })).action(async ({ parsedInput, ctx }) => {
+  if (!(await consumeRateLimit(`square-pay:${ctx.actor.userId}`, 10, 900))) throw new ActionError("Too many payment attempts. Wait a few minutes and try again.");
+  const result = await chargeSquare(ctx.actor, parsedInput.paymentId, parsedInput.sourceId);
+  revalidatePath("/app/loads", "layout");
+  revalidateTag("open-loads", "max");
+  return result;
 });
 
 export const startPayoutOnboardingAction = withActor.action(async ({ ctx }) => {

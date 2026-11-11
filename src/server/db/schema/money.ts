@@ -19,6 +19,7 @@ export const payment = pgTable(
       .references(() => user.id, { onDelete: "restrict" }),
     stripePaymentIntentId: text(),
     stripeChargeId: text(),
+    squarePaymentId: text(),
     currency: char({ length: 3 }).notNull().default("usd"),
     amountCents: integer().notNull(),
     carrierAmountCents: integer().notNull(),
@@ -30,6 +31,7 @@ export const payment = pgTable(
   },
   (t) => [
     uniqueIndex("payment_pi_uq").on(t.stripePaymentIntentId),
+    uniqueIndex("payment_square_uq").on(t.squarePaymentId),
     index("payment_load_idx").on(t.loadId),
     index("payment_shipper_idx").on(t.shipperId),
   ],

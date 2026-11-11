@@ -50,6 +50,13 @@
       "when": 1794415812399,
       "tag": "0006_square_oauth",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794419459043,
+      "tag": "0007_square_payment_id",
+      "breakpoints": true
     }
   ]
 }
